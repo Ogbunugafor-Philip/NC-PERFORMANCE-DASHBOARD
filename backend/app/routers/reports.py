@@ -28,8 +28,8 @@ async def upload_report(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> ReportUploadResponse:
-    report_date, rows, missing_fields = await parse_performance_excel(file)
-    report, validation, created = create_report(db, report_date, rows, missing_fields, current_user)
+    report_date, rows, parse_meta = await parse_performance_excel(file)
+    report, validation, created = create_report(db, report_date, rows, parse_meta, current_user)
     background_tasks.add_task(bg_generate_all_insights, report.id)
     return ReportUploadResponse(report=report, validation=validation, records_created=created)
 

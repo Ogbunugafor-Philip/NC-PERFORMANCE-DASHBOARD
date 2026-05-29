@@ -35,11 +35,14 @@ class ReportStatus(BaseModel):
 
 
 class UploadValidation(BaseModel):
+    report_date_extracted: str = ""
+    total_rows_found: int = 0
+    rows_skipped: int = 0
     total_records: int
     matched_dao_codes: list[str]
     unmatched_dao_codes: list[str]
     duplicate_dao_codes: list[str]
-    missing_required_fields: list[str]
+    missing_required_fields: list[str] = []
 
 
 class ReportUploadResponse(BaseModel):

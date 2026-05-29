@@ -30,7 +30,7 @@ export const RSMDashboard = () => {
   if (!summary.data?.report_date) return <EmptyReportState />;
   const clusterRows = (clusters.data || []) as any[];
   return (
-    <PageWrapper title="North Central Region Performance" subtitle={`Report date: ${formatDate(summary.data.report_date)}`}>
+    <PageWrapper title="North Central Region Performance" subtitle={`New to Bank Report as at ${formatDate(summary.data.report_date)}`}>
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 2 }}>
         <Tab label="Regional Overview" />
         <Tab label="FSO Rankings" />

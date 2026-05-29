@@ -19,8 +19,15 @@ def validate_rows(db: Session, rows: list[dict]) -> tuple[UploadValidation, dict
         user.dao_code: user
         for user in db.scalars(select(User).where(User.dao_code.in_(dao_codes))).all()
     }
-    matched = sorted([code for code in dao_codes if code in users])
-    unmatched = sorted(set(dao_codes) - set(users))
+    # Deduplicate: keep first occurrence only
+    seen: set[str] = set()
+    unique_codes: list[str] = []
+    for code in dao_codes:
+        if code not in seen:
+            seen.add(code)
+            unique_codes.append(code)
+    matched = sorted([code for code in unique_codes if code in users])
+    unmatched = sorted(set(unique_codes) - set(users))
     validation = UploadValidation(
         total_records=len(rows),
         matched_dao_codes=matched,
@@ -35,19 +42,34 @@ def create_report(
     db: Session,
     report_date,
     rows: list[dict],
-    missing_required_fields: list[str],
+    parse_meta: dict,
     uploaded_by: User,
 ) -> tuple[Report, UploadValidation, int]:
     validation, users = validate_rows(db, rows)
-    validation.missing_required_fields = missing_required_fields
-    if (
-        validation.unmatched_dao_codes
-        or validation.duplicate_dao_codes
-        or validation.missing_required_fields
-    ):
+
+    # Populate parse-time metadata
+    validation.rows_skipped = parse_meta.get("rows_skipped", 0)
+    validation.total_rows_found = parse_meta.get("total_rows_found", 0)
+    validation.report_date_extracted = (
+        f"{report_date.strftime('%B')} {report_date.day}, {report_date.year}"
+    )
+
+    # Only matched, first-occurrence rows are imported — unmatched are skipped
+    seen_codes: set[str] = set()
+    matched_rows: list[dict] = []
+    for row in rows:
+        code = normalize_dao_code(row["dao_code"])
+        if code in users and code not in seen_codes:
+            seen_codes.add(code)
+            matched_rows.append(row)
+
+    if not matched_rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=validation.model_dump(),
+            detail={
+                "message": "No matching users found for any DAO code in this report.",
+                "unmatched_dao_codes": validation.unmatched_dao_codes[:20],
+            },
         )
 
     db.execute(update(Report).values(is_active=False))
@@ -55,7 +77,7 @@ def create_report(
     db.add(report)
     db.flush()
 
-    for row in rows:
+    for row in matched_rows:
         dao_code = normalize_dao_code(row["dao_code"])
         user = users[dao_code]
         db.add(
@@ -76,7 +98,7 @@ def create_report(
     from app.services.performance_processor import ProcessorService
 
     ProcessorService(db).run_full_pipeline(report)
-    return report, validation, len(rows)
+    return report, validation, len(matched_rows)
 
 
 def get_active_report(db: Session) -> Report | None:

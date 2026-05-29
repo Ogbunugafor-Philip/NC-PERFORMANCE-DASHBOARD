@@ -1,7 +1,20 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import WarningIcon from '@mui/icons-material/Warning';
-import { Alert, Box, Button, Card, CardContent, Chip, LinearProgress, List, ListItem, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  LinearProgress,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Typography,
+} from '@mui/material';
 import Grid from '@mui/material/GridLegacy';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -14,9 +27,22 @@ import { PageWrapper } from '../../components/layout/PageWrapper';
 import { useNotificationStore } from '../../store/reportStore';
 import { formatDate } from '../../utils/formatters';
 
-type PreviewRow = Record<string, unknown> & {
+// ── Fixed column positions (0-indexed, matching the NTB Excel report) ─────────
+const COL_DAO_CODE     = 1;   // B
+const COL_STAFF_NAME   = 3;   // D
+const COL_IND_TARGET   = 9;   // J
+const COL_IND_ACTUAL   = 10;  // K
+const COL_IND_VALID    = 11;  // L
+const COL_BUS_TARGET   = 16;  // Q
+const COL_BUS_ACTUAL   = 17;  // R
+const COL_BUS_VALID    = 18;  // S
+const COL_DATE_SOURCE  = 9;   // J — also contains the date in row 1
+const ROW_DATE         = 0;   // Row 1 (0-indexed)
+const ROW_DATA_START   = 6;   // Row 7 (0-indexed)
+
+type PreviewRow = {
   dao_code: string;
-  name?: string;
+  name: string;
   ind_target: number;
   ind_actual: number;
   ind_valid: number;
@@ -25,118 +51,274 @@ type PreviewRow = Record<string, unknown> & {
   bus_valid: number;
 };
 
-const aliases: Record<keyof Omit<PreviewRow, 'name'> | 'name', string[]> = {
-  dao_code: ['dao code', 'dao', 'dao_code'],
-  name: ['name', 'staff name', 'fso name'],
-  ind_target: ['ind target', 'individual target'],
-  ind_actual: ['ind actual', 'individual actual'],
-  ind_valid: ['ind valid', 'individual valid'],
-  bus_target: ['bus target', 'business target'],
-  bus_actual: ['bus actual', 'business actual'],
-  bus_valid: ['bus valid', 'business valid']
-};
+const _DATE_RE =
+  /(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{4})/i;
 
-const normalize = (value: unknown) => String(value || '').trim().toLowerCase().replaceAll('_', ' ');
-const toNumber = (value: unknown) => Number(value || 0);
+function _toInt(v: unknown): number {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : Math.round(n);
+}
+
+function _normDao(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  // Handle numeric DAO codes (e.g., 520264 or 520264.0)
+  const n = Number(v);
+  const s = !isNaN(n) && isFinite(n) ? String(Math.round(n)) : String(v).trim();
+  return s.toUpperCase();
+}
+
+function _extractDate(matrix: unknown[][]): string {
+  try {
+    const cell = matrix[ROW_DATE]?.[COL_DATE_SOURCE];
+    if (cell instanceof Date) {
+      return cell.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+    }
+    const text = String(cell ?? '');
+    const m = _DATE_RE.exec(text);
+    if (m) return `${m[1]} ${m[2]}, ${m[3]}`;
+  } catch {
+    // fall through
+  }
+  return '';
+}
 
 export const PerformanceUpload = () => {
-  const [file, setFile] = useState<File | null>(null);
-  const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [missing, setMissing] = useState<string[]>([]);
-  const notify = useNotificationStore((state) => state.notify);
-  const queryClient = useQueryClient();
+  const [file, setFile]           = useState<File | null>(null);
+  const [rows, setRows]           = useState<PreviewRow[]>([]);
+  const [skipped, setSkipped]     = useState(0);
+  const [reportDateLabel, setReportDateLabel] = useState('');
+  const notify        = useNotificationStore((s) => s.notify);
+  const queryClient   = useQueryClient();
   const { data: status } = useQuery({ queryKey: ['report-status'], queryFn: getReportStatus });
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => getStaff() });
-  const staffDaoCodes = useMemo(() => new Set(staff.map((item) => item.dao_code)), [staff]);
-  const duplicates = useMemo(() => rows.map((r) => r.dao_code).filter((code, index, all) => all.indexOf(code) !== index), [rows]);
-  const unmatched = useMemo(() => rows.map((r) => r.dao_code).filter((code) => !staffDaoCodes.has(code)), [rows, staffDaoCodes]);
-  const matched = rows.length - new Set(unmatched).size;
-  const validationPasses = rows.length > 0 && unmatched.length === 0 && duplicates.length === 0 && missing.length === 0;
+
+  const staffDaoCodes = useMemo(() => new Set(staff.map((s) => s.dao_code)), [staff]);
+  const unmatched     = useMemo(() => [...new Set(rows.map((r) => r.dao_code).filter((c) => !staffDaoCodes.has(c)))], [rows, staffDaoCodes]);
+  const matched       = rows.length - unmatched.length;
+
+  // Upload is allowed as long as at least one row is matched; unmatched are just warned
+  const canUpload = rows.length > 0 && matched > 0;
+
   const mutation = useMutation({
     mutationFn: uploadReport,
     onSuccess: (data) => {
-      notify(`Report uploaded successfully for ${data.report.report_date}`, 'success');
+      const d = data.validation?.report_date_extracted || formatDate(data.report.report_date);
+      notify(`Report uploaded — New to Bank Report as at ${d}`, 'success');
       queryClient.invalidateQueries();
     },
-    onError: () => notify('Report upload failed. Review validation results.', 'error')
+    onError: () => notify('Upload failed. Check validation results.', 'error'),
   });
 
   const parseFile = async (selected: File) => {
     setFile(selected);
-    const workbook = XLSX.read(await selected.arrayBuffer(), { cellDates: true });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
-    const headerIndex = matrix.findIndex((row) => row.some((cell) => aliases.dao_code.includes(normalize(cell))));
-    const headers = (matrix[headerIndex] || []) as string[];
-    const raw = matrix.slice(headerIndex + 1).filter((row) => row.some(Boolean)).map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index]]))) as Record<string, unknown>[];
-    const mapped = Object.fromEntries(Object.entries(aliases).map(([key, values]) => [key, headers.find((header) => values.includes(normalize(header)))]));
-    const missingColumns = Object.entries(mapped).filter(([key, value]) => key !== 'name' && !value).map(([key]) => key);
-    setMissing(missingColumns);
-    setRows(raw.map((row) => ({
-      dao_code: String(row[mapped.dao_code as string] || '').trim().toUpperCase(),
-      name: String(row[mapped.name as string] || ''),
-      ind_target: toNumber(row[mapped.ind_target as string]),
-      ind_actual: toNumber(row[mapped.ind_actual as string]),
-      ind_valid: toNumber(row[mapped.ind_valid as string]),
-      bus_target: toNumber(row[mapped.bus_target as string]),
-      bus_actual: toNumber(row[mapped.bus_actual as string]),
-      bus_valid: toNumber(row[mapped.bus_valid as string])
-    })));
-  };
+    setRows([]);
+    setSkipped(0);
+    setReportDateLabel('');
 
-  const downloadValidation = () => {
-    const worksheet = XLSX.utils.json_to_sheet([{ total_records: rows.length, matched, unmatched: unmatched.join(', '), duplicates: duplicates.join(', '), missing: missing.join(', ') }]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Validation');
-    XLSX.writeFile(workbook, 'performance-validation-report.xlsx');
+    const workbook = XLSX.read(await selected.arrayBuffer(), { cellDates: true });
+    const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+    // Read as matrix (no header processing) so column positions are stable
+    const matrix   = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null });
+
+    setReportDateLabel(_extractDate(matrix));
+
+    const parsed: PreviewRow[] = [];
+    let skippedCount = 0;
+
+    for (let i = ROW_DATA_START; i < matrix.length; i++) {
+      const row = matrix[i] as unknown[];
+      const daoRaw  = row[COL_DAO_CODE];
+      const nameRaw = row[COL_STAFF_NAME];
+
+      const daoStr  = _normDao(daoRaw);
+      const nameStr = nameRaw != null ? String(nameRaw).trim() : '';
+
+      if (!daoStr || daoStr === '0' || !nameStr) {
+        skippedCount++;
+        continue;
+      }
+
+      parsed.push({
+        dao_code:   daoStr,
+        name:       nameStr,
+        ind_target: _toInt(row[COL_IND_TARGET]),
+        ind_actual: _toInt(row[COL_IND_ACTUAL]),
+        ind_valid:  _toInt(row[COL_IND_VALID]),
+        bus_target: _toInt(row[COL_BUS_TARGET]),
+        bus_actual: _toInt(row[COL_BUS_ACTUAL]),
+        bus_valid:  _toInt(row[COL_BUS_VALID]),
+      });
+    }
+
+    setRows(parsed);
+    setSkipped(skippedCount);
   };
 
   return (
-    <PageWrapper title="Performance Upload" subtitle="Upload New to Bank report data for the active period">
+    <PageWrapper
+      title="Performance Upload"
+      subtitle="Upload New to Bank report data for the active period"
+    >
       <Grid container spacing={2.5}>
-        <Grid item xs={12} md={4}><KPICard label="Current Active Report" value={formatDate(status?.active_report?.report_date)} /></Grid>
-        <Grid item xs={12} md={8}><Alert severity="warning">Uploading a new report will replace the current active report.</Alert></Grid>
-        <Grid item xs={12}>
-          <Card><CardContent>
-            <Box onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); const dropped = e.dataTransfer.files[0]; if (dropped) parseFile(dropped); }} sx={{ border: '2px dashed #E4002B', borderRadius: 2, p: 4, textAlign: 'center' }}>
-              <Typography fontWeight={900}>Drag and drop Excel report here</Typography>
-              <Typography color="text.secondary">Accepts .xlsx and .xls only</Typography>
-              <Button component="label" variant="contained" sx={{ mt: 2 }}>Choose File<input hidden type="file" accept=".xlsx,.xls" onChange={(e) => e.target.files?.[0] && parseFile(e.target.files[0])} /></Button>
-            </Box>
-          </CardContent></Card>
+        {/* Status */}
+        <Grid item xs={12} md={4}>
+          <KPICard
+            label="Current Active Report"
+            value={
+              status?.active_report?.report_date
+                ? `New to Bank Report as at ${formatDate(status.active_report.report_date)}`
+                : 'No active report'
+            }
+          />
         </Grid>
-        {mutation.isPending && <Grid item xs={12}><LinearProgress /></Grid>}
-        {file && <Grid item xs={12}><Alert severity="info">{file.name} selected. Review validation before confirming upload.</Alert></Grid>}
+        <Grid item xs={12} md={8}>
+          <Alert severity="warning">
+            Uploading a new report will replace the current active report.
+          </Alert>
+        </Grid>
+
+        {/* Drop zone */}
+        <Grid item xs={12}>
+          <Card>
+            <CardContent>
+              <Box
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const dropped = e.dataTransfer.files[0];
+                  if (dropped) parseFile(dropped);
+                }}
+                sx={{ border: '2px dashed #E4002B', borderRadius: 2, p: 4, textAlign: 'center' }}
+              >
+                <Typography fontWeight={900}>Drag and drop Excel report here</Typography>
+                <Typography color="text.secondary">Accepts .xlsx and .xls only</Typography>
+                <Button component="label" variant="contained" sx={{ mt: 2 }}>
+                  Choose File
+                  <input
+                    hidden
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => e.target.files?.[0] && parseFile(e.target.files[0])}
+                  />
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {mutation.isPending && (
+          <Grid item xs={12}>
+            <LinearProgress />
+          </Grid>
+        )}
+        {file && (
+          <Grid item xs={12}>
+            <Alert severity="info">{file.name} selected. Review validation below before uploading.</Alert>
+          </Grid>
+        )}
+
         {rows.length > 0 && (
           <>
-            <Grid item xs={12} md={3}><KPICard label="Total records found" value={rows.length} /></Grid>
-            <Grid item xs={12} md={3}><KPICard label="Matched DAO Codes" value={matched} /></Grid>
-            <Grid item xs={12} md={3}><KPICard label="Unmatched DAO Codes" value={new Set(unmatched).size} /></Grid>
-            <Grid item xs={12} md={3}><KPICard label="Duplicate records" value={new Set(duplicates).size} /></Grid>
-            <Grid item xs={12}><Card><CardContent><Typography variant="h6" sx={{ mb: 2 }}>Preview</Typography><DataTable rows={rows as unknown as Record<string, unknown>[]} columns={[
-              { key: 'dao_code', label: 'DAO Code' },
-              { key: 'name', label: 'Name' },
-              { key: 'ind_target', label: 'Ind. Target' },
-              { key: 'ind_actual', label: 'Ind. Actual' },
-              { key: 'ind_valid', label: 'Ind. Valid' },
-              { key: 'bus_target', label: 'Bus. Target' },
-              { key: 'bus_actual', label: 'Bus. Actual' },
-              { key: 'bus_valid', label: 'Bus. Valid' }
-            ]} /></CardContent></Card></Grid>
-            <Grid item xs={12}><Card><CardContent>
-              <Typography variant="h6">Report Validation</Typography>
-              <List dense>
-                <ListItem><ListItemIcon>{rows.length ? <CheckCircleIcon color="success" /> : <ErrorIcon color="error" />}</ListItemIcon><ListItemText primary="Records found" secondary={`${rows.length} rows`} /></ListItem>
-                <ListItem><ListItemIcon>{unmatched.length ? <ErrorIcon color="error" /> : <CheckCircleIcon color="success" />}</ListItemIcon><ListItemText primary="DAO code matching" secondary={unmatched.length ? [...new Set(unmatched)].join(', ') : 'All DAO codes matched'} /></ListItem>
-                <ListItem><ListItemIcon>{duplicates.length ? <WarningIcon color="warning" /> : <CheckCircleIcon color="success" />}</ListItemIcon><ListItemText primary="Duplicate records" secondary={duplicates.length ? [...new Set(duplicates)].join(', ') : 'No duplicates'} /></ListItem>
-                <ListItem><ListItemIcon>{missing.length ? <ErrorIcon color="error" /> : <CheckCircleIcon color="success" />}</ListItemIcon><ListItemText primary="Missing required fields" secondary={missing.length ? missing.join(', ') : 'All required fields present'} /></ListItem>
-              </List>
-              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip color={validationPasses ? 'success' : 'error'} label={validationPasses ? 'Validation passed' : 'Validation failed'} />
-                <Button onClick={downloadValidation}>Download validation report</Button>
-                {validationPasses && file && <Button variant="contained" onClick={() => mutation.mutate(file)} disabled={mutation.isPending}>Confirm Upload</Button>}
-              </Box>
-            </CardContent></Card></Grid>
+            {/* Summary cards */}
+            {reportDateLabel && (
+              <Grid item xs={12}>
+                <Alert severity="success" icon={<CheckCircleIcon />}>
+                  Report date extracted: <strong>New to Bank Report as at {reportDateLabel}</strong>
+                </Alert>
+              </Grid>
+            )}
+            <Grid item xs={12} md={3}><KPICard label="Total rows found" value={rows.length + skipped} /></Grid>
+            <Grid item xs={12} md={3}><KPICard label="Rows skipped (blank)" value={skipped} /></Grid>
+            <Grid item xs={12} md={3}><KPICard label="Matched to users" value={matched} /></Grid>
+            <Grid item xs={12} md={3}><KPICard label="Unmatched DAO Codes" value={unmatched.length} /></Grid>
+
+            {/* Preview table */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 2 }}>Preview (first 50 rows)</Typography>
+                  <DataTable
+                    rows={(rows.slice(0, 50)) as unknown as Record<string, unknown>[]}
+                    columns={[
+                      { key: 'dao_code',   label: 'DAO Code'    },
+                      { key: 'name',       label: 'Name'        },
+                      { key: 'ind_target', label: 'Ind Target'  },
+                      { key: 'ind_actual', label: 'Ind Actual'  },
+                      { key: 'ind_valid',  label: 'Ind Valid'   },
+                      { key: 'bus_target', label: 'Bus Target'  },
+                      { key: 'bus_actual', label: 'Bus Actual'  },
+                      { key: 'bus_valid',  label: 'Bus Valid'   },
+                    ]}
+                  />
+                </CardContent>
+              </Card>
+            </Grid>
+
+            {/* Validation report */}
+            <Grid item xs={12}>
+              <Card>
+                <CardContent>
+                  <Typography variant="h6" sx={{ mb: 1 }}>Upload Validation</Typography>
+                  <List dense>
+                    <ListItem>
+                      <ListItemIcon>
+                        {reportDateLabel ? <CheckCircleIcon color="success" /> : <WarningIcon color="warning" />}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="Report date"
+                        secondary={reportDateLabel ? `New to Bank Report as at ${reportDateLabel}` : 'Could not extract date from Row 1, Column J'}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
+                      <ListItemText primary="Data rows found" secondary={`${rows.length} data rows, ${skipped} blank rows skipped`} />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon>
+                        {matched > 0 ? <CheckCircleIcon color="success" /> : <ErrorIcon color="error" />}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary="DAO code matching"
+                        secondary={`${matched} matched, ${unmatched.length} unmatched`}
+                      />
+                    </ListItem>
+                    {unmatched.length > 0 && (
+                      <ListItem sx={{ pl: 4 }}>
+                        <ListItemIcon><WarningIcon color="warning" /></ListItemIcon>
+                        <ListItemText
+                          primary="Unmatched DAO codes (will be skipped)"
+                          secondary={unmatched.join(', ')}
+                        />
+                      </ListItem>
+                    )}
+                  </List>
+
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                    <Chip
+                      color={canUpload ? 'success' : 'error'}
+                      label={canUpload ? `Ready to upload — ${matched} records` : 'Cannot upload — no matched users'}
+                    />
+                    {unmatched.length > 0 && (
+                      <Chip
+                        color="warning"
+                        label={`${unmatched.length} DAO code(s) not found in system — will be skipped`}
+                      />
+                    )}
+                    {canUpload && file && (
+                      <Button
+                        variant="contained"
+                        onClick={() => mutation.mutate(file)}
+                        disabled={mutation.isPending}
+                        sx={{ ml: 'auto' }}
+                      >
+                        Confirm Upload
+                      </Button>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
           </>
         )}
       </Grid>
