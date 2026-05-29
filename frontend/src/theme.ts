@@ -23,10 +23,7 @@ const theme = createTheme({
   },
   shape: { borderRadius: 8 },
   breakpoints: {
-    // lg lowered to 1024 so laptops (e.g. 1366px) reach the desktop layout
-    // instead of collapsing to the sm/md fallback; xl set to 1440 for the
-    // cluster 3-per-row rule. Mobile (<768) and tablet (768-1023) are unaffected.
-    values: { xs: 0, sm: 600, md: 900, lg: 1024, xl: 1440 }
+    values: { xs: 0, sm: 600, md: 900, lg: 1200, xl: 1536 }
   },
   components: {
     MuiButton: {
