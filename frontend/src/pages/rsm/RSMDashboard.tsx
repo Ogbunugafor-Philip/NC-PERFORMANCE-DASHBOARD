@@ -6,7 +6,6 @@ import Grid from '@mui/material/GridLegacy';
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { getRsmFull } from '../../api/dashboard';
-import { AchievementGauge } from '../../components/charts/AchievementGauge';
 import {
   ClusterGroupedBar,
   DonutChart,
@@ -36,9 +35,9 @@ const AchievementStatCard = ({ title, pct }: { title: string; pct: number }) => 
   const status = pct >= 100 ? 'TARGET MET' : pct >= 80 ? 'ON TRACK' : pct >= 50 ? 'AT RISK' : 'CRITICAL';
   return (
     <Card sx={{ borderLeft: `5px solid ${color}`, height: '100%' }}>
-      <CardContent>
-        <Typography variant="body2" color="text.secondary" fontWeight={800}>{title}</Typography>
-        <Typography sx={{ mt: 0.5, fontSize: 32, fontWeight: 900 }}>{pct}%</Typography>
+      <CardContent sx={{ '@media (min-width:1024px)': { height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 120, p: 2 } }}>
+        <Typography variant="body2" color="text.secondary" fontWeight={800} sx={{ fontSize: { xs: 12, sm: 14 } }}>{title}</Typography>
+        <Typography sx={{ mt: 0.5, fontSize: { xs: 28, sm: 32 }, fontWeight: 900 }}>{pct}%</Typography>
         <Box sx={{ mt: 0.5 }}><StatusBadge status={status} /></Box>
       </CardContent>
     </Card>
@@ -94,7 +93,7 @@ export const RegionalOverviewTab = ({ summary, clusters }: { summary: any; clust
       <Grid item xs={12} sm={6} lg={2}><KPICard title="Cluster Heads" value={summary.total_cluster_heads} icon={<GroupsIcon />} color="#1A1A1A" /></Grid>
       <Grid item xs={12} sm={6} lg={2}><AchievementStatCard title="Regional Ind % Achievement" pct={summary.regional_ind_pct_achievement} /></Grid>
       <Grid item xs={12} sm={6} lg={2}><AchievementStatCard title="Regional Bus % Achievement" pct={summary.regional_bus_pct_achievement} /></Grid>
-      <Grid item xs={12} sm={6} lg={2}><Card sx={{ height: '100%' }}><CardContent sx={{ p: 1 }}><AchievementGauge value={summary.regional_scorecard} label="Regional Scorecard" /></CardContent></Card></Grid>
+      <Grid item xs={12} sm={6} lg={2}><KPICard title="Regional Scorecard" value={summary.regional_scorecard} subtitle={summary.scorecard_grade} color="#FFC107" /></Grid>
       <Grid item xs={12} sm={6} lg={2}><KPICard title="Active Report Date" value={summary.report_date_label} icon={<CalendarMonthIcon />} color="#1A1A1A" /></Grid>
 
       <Grid item xs={12}><RegionalMetricSection title="Individual Accounts — Regional Totals" metric={summary.individual} /></Grid>
@@ -148,7 +147,7 @@ export const ClusterSummaryTab = ({ clusters, fsos, reportDateLabel, fileNameDat
       </Box>
       <Grid container spacing={2.5}>
         {sorted.map((c) => (
-          <Grid item xs={12} lg={6} key={c.cluster_head_id}>
+          <Grid item xs={12} lg={6} xl={4} key={c.cluster_head_id}>
             <ClusterCard cluster={c} teamFsos={fsosByHead[c.cluster_head_id] || []} reportDateLabel={reportDateLabel} fileNameDate={fileNameDate} />
           </Grid>
         ))}

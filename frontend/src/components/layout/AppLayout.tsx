@@ -30,7 +30,11 @@ export const AppLayout = () => {
         }}
       >
         <Toolbar />
-        <Outlet />
+        {/* Desktop only (>=1024px): cap content width and centre it so large
+            screens don't stretch; tablet/mobile are untouched. */}
+        <Box sx={{ '@media (min-width:1024px)': { maxWidth: 1600, mx: 'auto' } }}>
+          <Outlet />
+        </Box>
       </Box>
       {user && isMobile && <BottomNav role={user.position} />}
     </Box>
