@@ -1,3 +1,5 @@
+from datetime import datetime
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
@@ -20,6 +22,8 @@ from app.utils.performance_parser import parse_performance_excel
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "reports"
+
 
 @router.post("/upload", response_model=ReportUploadResponse)
 async def upload_report(
@@ -28,8 +32,18 @@ async def upload_report(
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> ReportUploadResponse:
+    # Persist the raw Excel so the report can be re-read later
+    content = await file.read()
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    base_name = Path(file.filename or "report.xlsx").name
+    dest = UPLOAD_DIR / f"{datetime.utcnow():%Y%m%d_%H%M%S}_{base_name}"
+    dest.write_bytes(content)
+    await file.seek(0)
+
     report_date, rows, parse_meta = await parse_performance_excel(file)
-    report, validation, created = create_report(db, report_date, rows, parse_meta, current_user)
+    report, validation, created = create_report(
+        db, report_date, rows, parse_meta, current_user, file_path=str(dest)
+    )
     background_tasks.add_task(bg_generate_all_insights, report.id)
     return ReportUploadResponse(report=report, validation=validation, records_created=created)
 

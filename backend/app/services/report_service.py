@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from uuid import UUID
 
@@ -9,6 +10,60 @@ from app.models.report import PerformanceData, Report
 from app.models.user import User, UserPosition
 from app.schemas.reports import UploadValidation
 from app.utils.excel_parser import normalize_dao_code
+
+
+def _norm_name(value: str) -> str:
+    """Normalise a person name for matching: collapse whitespace, lowercase."""
+    return " ".join(str(value or "").split()).lower()
+
+
+def _slug_dao(name: str, taken: set[str]) -> str:
+    """Synthesise a unique DAO code for an auto-created Cluster Head."""
+    base = re.sub(r"[^A-Za-z0-9]+", "", name).upper()[:18] or "HEAD"
+    candidate = f"CH-{base}"
+    suffix = 1
+    while candidate in taken:
+        suffix += 1
+        candidate = f"CH-{base}-{suffix}"
+    taken.add(candidate)
+    return candidate
+
+
+class ClusterHeadResolver:
+    """Resolves (and auto-creates) Cluster Head users from Excel names."""
+
+    def __init__(self, db: Session):
+        self.db = db
+        heads = db.scalars(
+            select(User).where(User.position == UserPosition.CLUSTER_HEAD)
+        ).all()
+        self._by_name: dict[str, User] = {_norm_name(h.name): h for h in heads}
+        self._taken_dao: set[str] = {
+            code for code in db.scalars(select(User.dao_code)).all()
+        }
+        self.created: list[User] = []
+
+    def resolve(self, name: str, state_cluster: str) -> User | None:
+        key = _norm_name(name)
+        if not key:
+            return None
+        head = self._by_name.get(key)
+        if head is None:
+            head = User(
+                name=" ".join(name.split()),
+                dao_code=_slug_dao(name, self._taken_dao),
+                position=UserPosition.CLUSTER_HEAD,
+                is_active=True,
+                is_first_login=True,
+                cluster_name=state_cluster or None,
+            )
+            self.db.add(head)
+            self.db.flush()  # assign id
+            self._by_name[key] = head
+            self.created.append(head)
+        elif state_cluster and not head.cluster_name:
+            head.cluster_name = state_cluster
+        return head
 
 
 def validate_rows(db: Session, rows: list[dict]) -> tuple[UploadValidation, dict[str, User]]:
@@ -44,47 +99,90 @@ def create_report(
     rows: list[dict],
     parse_meta: dict,
     uploaded_by: User,
+    file_path: str | None = None,
 ) -> tuple[Report, UploadValidation, int]:
-    validation, users = validate_rows(db, rows)
+    """Fully-automatic upload pipeline.
 
-    # Populate parse-time metadata
-    validation.rows_skipped = parse_meta.get("rows_skipped", 0)
-    validation.total_rows_found = parse_meta.get("total_rows_found", 0)
-    validation.report_date_extracted = (
-        f"{report_date.strftime('%B')} {report_date.day}, {report_date.year}"
-    )
+    Every FSO row is imported. If a DAO code is unknown it is auto-registered
+    as an FSO and linked to its Cluster Head (Column G), creating the Cluster
+    Head too when necessary. The upload is never blocked on unmatched users.
+    """
+    # Existing FSO/user lookup by DAO code
+    existing: dict[str, User] = {
+        u.dao_code: u for u in db.scalars(select(User)).all()
+    }
+    head_resolver = ClusterHeadResolver(db)
 
-    # Only matched, first-occurrence rows are imported — unmatched are skipped
+    counts = Counter(normalize_dao_code(r["dao_code"]) for r in rows if r.get("dao_code"))
+    duplicate_dao_codes = sorted([c for c, n in counts.items() if n > 1])
+
+    new_fsos = 0
+    updated_fsos = 0
     seen_codes: set[str] = set()
-    matched_rows: list[dict] = []
+    import_rows: list[tuple[User, dict]] = []
+    matched_codes: list[str] = []
+
     for row in rows:
-        code = normalize_dao_code(row["dao_code"])
-        if code in users and code not in seen_codes:
-            seen_codes.add(code)
-            matched_rows.append(row)
+        dao_code = normalize_dao_code(row["dao_code"])
+        if not dao_code or dao_code in seen_codes:
+            continue
+        seen_codes.add(dao_code)
 
-    if not matched_rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "message": "No matching users found for any DAO code in this report.",
-                "unmatched_dao_codes": validation.unmatched_dao_codes[:20],
-            },
-        )
+        name = " ".join(str(row.get("name", "")).split())
+        state_cluster = (row.get("state_cluster") or "").strip()
+        head = head_resolver.resolve(row.get("cluster_head", ""), state_cluster)
 
+        user = existing.get(dao_code)
+        if user is None:
+            # ── Auto-register a brand-new FSO ──
+            user = User(
+                name=name or dao_code,
+                dao_code=dao_code,
+                position=UserPosition.FSO,
+                is_active=True,
+                is_first_login=True,
+                cluster_head_id=head.id if head else None,
+                cluster_name=state_cluster or None,
+            )
+            db.add(user)
+            db.flush()
+            existing[dao_code] = user
+            new_fsos += 1
+        else:
+            # ── Use existing user, refresh details ──
+            changed = False
+            if name and user.name != name:
+                user.name = name
+                changed = True
+            if head and user.cluster_head_id != head.id:
+                user.cluster_head_id = head.id
+                changed = True
+            if state_cluster and user.cluster_name != state_cluster:
+                user.cluster_name = state_cluster
+                changed = True
+            if changed:
+                updated_fsos += 1
+
+        matched_codes.append(dao_code)
+        import_rows.append((user, row))
+
+    # Deactivate previous reports and create the new active report
     db.execute(update(Report).values(is_active=False))
-    report = Report(report_date=report_date, uploaded_by=uploaded_by.id, is_active=True)
+    report = Report(
+        report_date=report_date,
+        uploaded_by=uploaded_by.id,
+        is_active=True,
+        file_path=file_path,
+    )
     db.add(report)
     db.flush()
 
-    for row in matched_rows:
-        dao_code = normalize_dao_code(row["dao_code"])
-        user = users[dao_code]
+    for user, row in import_rows:
         db.add(
             PerformanceData(
                 report_id=report.id,
                 user_id=user.id,
-                dao_code=dao_code,
+                dao_code=user.dao_code,
                 ind_target=row["ind_target"],
                 ind_actual=row["ind_actual"],
                 ind_valid=row["ind_valid"],
@@ -95,10 +193,26 @@ def create_report(
         )
     db.commit()
     db.refresh(report)
+
     from app.services.performance_processor import ProcessorService
 
     ProcessorService(db).run_full_pipeline(report)
-    return report, validation, len(matched_rows)
+
+    validation = UploadValidation(
+        report_date_extracted=f"{report_date.strftime('%B')} {report_date.day}, {report_date.year}",
+        total_rows_found=parse_meta.get("total_rows_found", 0),
+        rows_skipped=parse_meta.get("rows_skipped", 0),
+        total_records=len(import_rows),
+        matched_dao_codes=sorted(matched_codes),
+        unmatched_dao_codes=[],
+        duplicate_dao_codes=duplicate_dao_codes,
+        new_fsos_registered=new_fsos,
+        existing_fsos_updated=updated_fsos,
+        cluster_heads_created=len(head_resolver.created),
+        calculations_complete=True,
+        rankings_updated=True,
+    )
+    return report, validation, len(import_rows)
 
 
 def get_active_report(db: Session) -> Report | None:

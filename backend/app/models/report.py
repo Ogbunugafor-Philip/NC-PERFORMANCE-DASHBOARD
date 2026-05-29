@@ -22,6 +22,7 @@ class Report(Base):
         DateTime(timezone=False), default=datetime.utcnow, nullable=False
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     uploader = relationship("User")
     performance_records: Mapped[list["PerformanceData"]] = relationship(

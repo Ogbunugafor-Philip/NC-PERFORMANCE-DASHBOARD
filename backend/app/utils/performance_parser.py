@@ -23,6 +23,7 @@ from fastapi import HTTPException, UploadFile, status
 COL_DAO_CODE     = 1   # B
 COL_STAFF_NAME   = 3   # D
 COL_CLUSTER_HEAD = 6   # G
+COL_STATE_CLUSTER = 7  # H
 COL_IND_TARGET   = 9   # J  ← also contains date in row 1
 COL_IND_ACTUAL   = 10  # K
 COL_IND_VALID    = 11  # L
@@ -197,11 +198,14 @@ async def parse_performance_excel(
 
         ch_raw = _col(COL_CLUSTER_HEAD)
         cluster_head = "" if pd.isna(ch_raw) else str(ch_raw).strip()
+        sc_raw = _col(COL_STATE_CLUSTER)
+        state_cluster = "" if pd.isna(sc_raw) else str(sc_raw).strip()
 
         rows.append({
             "dao_code":     dao_code,
             "name":         name_str,
             "cluster_head": cluster_head,
+            "state_cluster": state_cluster,
             "ind_target":   _to_int(_col(COL_IND_TARGET)),
             "ind_actual":   _to_int(_col(COL_IND_ACTUAL)),
             "ind_valid":    _to_int(_col(COL_IND_VALID)),

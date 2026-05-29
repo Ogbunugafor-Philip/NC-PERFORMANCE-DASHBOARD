@@ -1,5 +1,4 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
 import WarningIcon from '@mui/icons-material/Warning';
 import {
   Alert,
@@ -88,23 +87,25 @@ export const PerformanceUpload = () => {
   const [rows, setRows]           = useState<PreviewRow[]>([]);
   const [skipped, setSkipped]     = useState(0);
   const [reportDateLabel, setReportDateLabel] = useState('');
+  const [result, setResult]       = useState<any>(null);
   const notify        = useNotificationStore((s) => s.notify);
   const queryClient   = useQueryClient();
   const { data: status } = useQuery({ queryKey: ['report-status'], queryFn: getReportStatus });
   const { data: staff = [] } = useQuery({ queryKey: ['staff'], queryFn: () => getStaff() });
 
   const staffDaoCodes = useMemo(() => new Set(staff.map((s) => s.dao_code)), [staff]);
-  const unmatched     = useMemo(() => [...new Set(rows.map((r) => r.dao_code).filter((c) => !staffDaoCodes.has(c)))], [rows, staffDaoCodes]);
-  const matched       = rows.length - unmatched.length;
+  // DAO codes already in the system vs. those that will be auto-registered as new FSOs
+  const newCodes      = useMemo(() => [...new Set(rows.map((r) => r.dao_code).filter((c) => !staffDaoCodes.has(c)))], [rows, staffDaoCodes]);
+  const existingCount = rows.length - newCodes.length;
 
-  // Upload is allowed as long as at least one row is matched; unmatched are just warned
-  const canUpload = rows.length > 0 && matched > 0;
+  // Fully automatic: any file with data rows can be uploaded. Missing users are auto-created.
+  const canUpload = rows.length > 0;
 
   const mutation = useMutation({
     mutationFn: uploadReport,
     onSuccess: (data) => {
-      const d = data.validation?.report_date_extracted || formatDate(data.report.report_date);
-      notify(`Report uploaded — New to Bank Report as at ${d}`, 'success');
+      setResult(data.validation);
+      notify(`Report uploaded — ${data.validation?.new_fsos_registered ?? 0} new FSOs auto-registered`, 'success');
       queryClient.invalidateQueries();
     },
     onError: () => notify('Upload failed. Check validation results.', 'error'),
@@ -115,6 +116,7 @@ export const PerformanceUpload = () => {
     setRows([]);
     setSkipped(0);
     setReportDateLabel('');
+    setResult(null);
 
     const workbook = XLSX.read(await selected.arrayBuffer(), { cellDates: true });
     const sheet    = workbook.Sheets[workbook.SheetNames[0]];
@@ -230,8 +232,8 @@ export const PerformanceUpload = () => {
             )}
             <Grid item xs={12} md={3}><KPICard label="Total rows found" value={rows.length + skipped} /></Grid>
             <Grid item xs={12} md={3}><KPICard label="Rows skipped (blank)" value={skipped} /></Grid>
-            <Grid item xs={12} md={3}><KPICard label="Matched to users" value={matched} /></Grid>
-            <Grid item xs={12} md={3}><KPICard label="Unmatched DAO Codes" value={unmatched.length} /></Grid>
+            <Grid item xs={12} md={3}><KPICard label="Already in system" value={existingCount} color="#00A651" /></Grid>
+            <Grid item xs={12} md={3}><KPICard label="New FSOs (auto-register)" value={newCodes.length} color="#1A1A1A" /></Grid>
 
             {/* Preview table */}
             <Grid item xs={12}>
@@ -275,35 +277,27 @@ export const PerformanceUpload = () => {
                       <ListItemText primary="Data rows found" secondary={`${rows.length} data rows, ${skipped} blank rows skipped`} />
                     </ListItem>
                     <ListItem>
-                      <ListItemIcon>
-                        {matched > 0 ? <CheckCircleIcon color="success" /> : <ErrorIcon color="error" />}
-                      </ListItemIcon>
+                      <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
                       <ListItemText
-                        primary="DAO code matching"
-                        secondary={`${matched} matched, ${unmatched.length} unmatched`}
+                        primary="Auto-registration"
+                        secondary={`${existingCount} already in system, ${newCodes.length} new FSO(s) will be auto-registered and linked to their Cluster Head`}
                       />
                     </ListItem>
-                    {unmatched.length > 0 && (
+                    {newCodes.length > 0 && (
                       <ListItem sx={{ pl: 4 }}>
-                        <ListItemIcon><WarningIcon color="warning" /></ListItemIcon>
+                        <ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon>
                         <ListItemText
-                          primary="Unmatched DAO codes (will be skipped)"
-                          secondary={unmatched.join(', ')}
+                          primary="New DAO codes (auto-created on upload)"
+                          secondary={newCodes.join(', ')}
                         />
                       </ListItem>
                     )}
                   </List>
 
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
-                    <Chip
-                      color={canUpload ? 'success' : 'error'}
-                      label={canUpload ? `Ready to upload — ${matched} records` : 'Cannot upload — no matched users'}
-                    />
-                    {unmatched.length > 0 && (
-                      <Chip
-                        color="warning"
-                        label={`${unmatched.length} DAO code(s) not found in system — will be skipped`}
-                      />
+                    <Chip color="success" label={`Ready to upload — ${rows.length} records`} />
+                    {newCodes.length > 0 && (
+                      <Chip color="info" label={`${newCodes.length} new FSO(s) will be auto-registered`} />
                     )}
                     {canUpload && file && (
                       <Button
@@ -319,6 +313,26 @@ export const PerformanceUpload = () => {
                 </CardContent>
               </Card>
             </Grid>
+
+            {/* Auto-registration result after upload */}
+            {result && (
+              <Grid item xs={12}>
+                <Card sx={{ borderLeft: '5px solid #00A651' }}>
+                  <CardContent>
+                    <Typography variant="h6" sx={{ mb: 1 }}>Upload Complete</Typography>
+                    <List dense>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Report date" secondary={`New to Bank Report as at ${result.report_date_extracted}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Total FSO rows imported" secondary={`${result.total_records}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="New FSOs auto-registered" secondary={`${result.new_fsos_registered}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Existing FSOs updated" secondary={`${result.existing_fsos_updated}`} /></ListItem>
+                      {result.cluster_heads_created > 0 && <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Cluster Heads auto-created" secondary={`${result.cluster_heads_created}`} /></ListItem>}
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="All KPIs calculated" secondary={result.calculations_complete ? 'Complete' : 'Pending'} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Rankings updated" secondary={result.rankings_updated ? 'Complete' : 'Pending'} /></ListItem>
+                    </List>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
           </>
         )}
       </Grid>

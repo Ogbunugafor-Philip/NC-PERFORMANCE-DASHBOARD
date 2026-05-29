@@ -26,6 +26,7 @@ class ReportOut(BaseModel):
     uploaded_by: uuid.UUID
     uploaded_at: datetime
     is_active: bool
+    file_path: str | None = None
 
 
 class ReportStatus(BaseModel):
@@ -43,6 +44,11 @@ class UploadValidation(BaseModel):
     unmatched_dao_codes: list[str]
     duplicate_dao_codes: list[str]
     missing_required_fields: list[str] = []
+    new_fsos_registered: int = 0
+    existing_fsos_updated: int = 0
+    cluster_heads_created: int = 0
+    calculations_complete: bool = False
+    rankings_updated: bool = False
 
 
 class ReportUploadResponse(BaseModel):
