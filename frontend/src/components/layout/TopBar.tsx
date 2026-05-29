@@ -26,7 +26,6 @@ export const TopBar = ({ sidebarWidth, isMobile }: { sidebarWidth: number; isMob
         ml: `${sidebarWidth}px`,
         borderBottom: '1px solid #E8E8E8',
         backgroundColor: '#fff',
-        '@media (max-width:767px)': { width: '100%', ml: 0 },
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 56, md: 68 }, gap: 1.5 }}>

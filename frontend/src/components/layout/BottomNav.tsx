@@ -44,8 +44,6 @@ export const BottomNav = ({ role }: { role: UserPosition }) => {
         borderTop: '1px solid #ECECEC',
         boxShadow: '0 -4px 16px rgba(0,0,0,0.08)',
         pb: 'env(safe-area-inset-bottom)',
-        // Hide on tablet/desktop (>=768px): sidebar handles navigation there
-        '@media (min-width:768px)': { display: 'none' },
       }}
     >
       <BottomNavigation
