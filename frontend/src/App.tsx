@@ -9,6 +9,7 @@ import { StaffBulkUpload } from './pages/admin/StaffBulkUpload';
 import { StaffCreate } from './pages/admin/StaffCreate';
 import { StaffEdit } from './pages/admin/StaffEdit';
 import { StaffManagement } from './pages/admin/StaffManagement';
+import { ReportSummary } from './pages/admin/ReportSummary';
 import { ChangePasswordPage } from './pages/auth/ChangePasswordPage';
 import { FirstLoginPage } from './pages/auth/FirstLoginPage';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -56,6 +57,7 @@ const App = () => (
       <Route path="/admin/staff/bulk" element={<Protected roles={['ADMIN']}><StaffBulkUpload /></Protected>} />
       <Route path="/admin/performance-upload" element={<Protected roles={['ADMIN']}><PerformanceUpload /></Protected>} />
       <Route path="/admin/reports" element={<Protected roles={['ADMIN']}><PerformanceUpload /></Protected>} />
+      <Route path="/admin/report-summary" element={<Protected roles={['ADMIN']}><ReportSummary report={null} validation={null} summary={null} /></Protected>} />
       <Route path="/admin/analytics" element={<Protected roles={['ADMIN']}><AdminDashboard /></Protected>} />
       <Route path="/rsm/dashboard" element={<Protected roles={['RSM']}><RSMDashboard /></Protected>} />
       <Route path="/cluster/dashboard" element={<Protected roles={['CLUSTER_HEAD']}><ClusterHeadDashboard /></Protected>} />

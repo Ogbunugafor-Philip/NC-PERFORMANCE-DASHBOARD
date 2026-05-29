@@ -8,5 +8,11 @@ const colorFor = (status: string): 'success' | 'warning' | 'error' | 'default' =
 };
 
 export const StatusBadge = ({ status }: { status: string }) => (
-  <Chip size="small" label={status} color={colorFor(status)} sx={{ fontWeight: 800 }} />
+  <Chip
+    size="small"
+    label={status}
+    color={colorFor(status)}
+    variant={status === 'ON TRACK' ? 'outlined' : 'filled'}
+    sx={{ fontWeight: 900, letterSpacing: 0.2 }}
+  />
 );
