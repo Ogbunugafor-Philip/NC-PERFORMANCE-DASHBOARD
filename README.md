@@ -465,11 +465,7 @@ Nginx (port 443 SSL)
 PostgreSQL :5432
 ```
 
-**Other services on the same server (isolated):**
-- n8n (port 5678)
-- Qdrant (port 6333)
-- Ollama (port 11434)
-- Streamlit (port 8501)
+The application runs in isolation on the host, with its own systemd unit, dedicated Nginx server block, and its own PostgreSQL database, kept separate from any other services on the machine.
 
 ---
 
