@@ -32,7 +32,7 @@ export const DonutChart = memo(({ valid, invalid, title }: { valid: number; inva
     { name: 'Invalid', value: invalid },
   ];
   return (
-    <Box sx={{ height: 260 }}>
+    <Box sx={{ height: { xs: 200, sm: 260 } }}>
       {title && <Typography fontWeight={900} sx={{ mb: 0.5 }}>{title}</Typography>}
       <ResponsiveContainer>
         <PieChart>
@@ -59,7 +59,7 @@ export const ClusterGroupedBar = memo(({ clusters }: { clusters: any[] }) => {
     bus: c.business?.pct_achievement ?? 0,
   }));
   return (
-    <Box sx={{ height: 380 }}>
+    <Box sx={{ height: { xs: 300, sm: 380 } }}>
       <Typography variant="h6" sx={{ mb: 1 }}>Cluster Performance Comparison</Typography>
       <ResponsiveContainer>
         <BarChart data={data} margin={{ bottom: 60 }}>
@@ -83,7 +83,7 @@ export const ClusterGroupedBar = memo(({ clusters }: { clusters: any[] }) => {
 
 // ── Vertical bar: top/bottom N by scorecard ───────────────────────────────
 export const ScoreBarChart = memo(({ data, title }: { data: { name: string; score: number }[]; title?: string }) => (
-  <Box sx={{ height: 320 }}>
+  <Box sx={{ height: { xs: 240, sm: 320 } }}>
     {title && <Typography variant="h6" sx={{ mb: 1 }}>{title}</Typography>}
     <ResponsiveContainer>
       <BarChart data={data} margin={{ bottom: 60 }}>

@@ -191,11 +191,12 @@ export const PerformanceUpload = () => {
                   const dropped = e.dataTransfer.files[0];
                   if (dropped) parseFile(dropped);
                 }}
-                sx={{ border: '2px dashed #E4002B', borderRadius: 2, p: 4, textAlign: 'center' }}
+                sx={{ border: '2px dashed #E4002B', borderRadius: 2, p: { xs: 3, sm: 4 }, textAlign: 'center' }}
               >
-                <Typography fontWeight={900}>Drag and drop Excel report here</Typography>
+                <Typography fontWeight={900} sx={{ display: { xs: 'none', sm: 'block' } }}>Drag and drop Excel report here</Typography>
+                <Typography fontWeight={900} sx={{ display: { xs: 'block', sm: 'none' } }}>Tap to upload Excel report</Typography>
                 <Typography color="text.secondary">Accepts .xlsx and .xls only</Typography>
-                <Button component="label" variant="contained" sx={{ mt: 2 }}>
+                <Button component="label" variant="contained" sx={{ mt: 2, width: { xs: '100%', sm: 'auto' } }}>
                   Choose File
                   <input
                     hidden

@@ -28,7 +28,13 @@ const theme = createTheme({
   components: {
     MuiButton: {
       styleOverrides: {
-        root: { borderRadius: 8, boxShadow: 'none', padding: '10px 18px' },
+        // Larger touch target on mobile only — desktop padding unchanged
+        root: {
+          borderRadius: 8,
+          boxShadow: 'none',
+          padding: '10px 18px',
+          '@media (max-width:767px)': { minHeight: 44 },
+        },
         containedPrimary: { '&:hover': { boxShadow: 'none', backgroundColor: '#B80022' } }
       }
     },
@@ -48,6 +54,35 @@ const theme = createTheme({
     },
     MuiSelect: {
       defaultProps: { size: 'small' }
+    },
+    // 16px input font on mobile prevents iOS auto-zoom
+    MuiInputBase: {
+      styleOverrides: {
+        input: { '@media (max-width:767px)': { fontSize: 16 } }
+      }
+    },
+    // Bottom-sheet dialogs on mobile; centered modal on desktop (unchanged)
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          '@media (max-width:767px)': {
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 0,
+            margin: 0,
+            width: '100%',
+            maxWidth: '100%',
+            borderRadius: '16px 16px 0 0',
+            maxHeight: '92vh',
+          },
+        },
+      }
+    },
+    MuiTab: {
+      styleOverrides: {
+        root: { '@media (max-width:767px)': { minHeight: 48, minWidth: 'auto', padding: '8px 12px' } }
+      }
     }
   }
 });

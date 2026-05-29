@@ -23,9 +23,9 @@ export const KPICard = ({
   trend?: 'up' | 'down';
 }) => (
   <Card sx={{ borderLeft: `5px solid ${color}`, transition: 'box-shadow 180ms ease, transform 180ms ease', '&:hover': { boxShadow: '0 12px 30px rgba(0,0,0,0.10)', transform: 'translateY(-2px)' } }}>
-    <CardContent sx={{ minHeight: 132 }}>
+    <CardContent sx={{ minHeight: { xs: 'auto', sm: 132 }, '@media (max-width:767px)': { p: '12px' } }}>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-        <Typography variant="body2" color="text.secondary" fontWeight={800}>{title || label}</Typography>
+        <Typography variant="body2" color="text.secondary" fontWeight={800} sx={{ fontSize: { xs: 12, sm: 14 } }}>{title || label}</Typography>
         <Box sx={{ color }}>{icon}{trend === 'up' && <ArrowUpwardIcon fontSize="small" />}{trend === 'down' && <ArrowDownwardIcon fontSize="small" />}</Box>
       </Box>
       <Typography sx={{ mt: 0.75, fontSize: { xs: 28, sm: 32 }, lineHeight: 1.1, fontWeight: 900 }}>{value}</Typography>

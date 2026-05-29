@@ -71,7 +71,7 @@ export const LoginPage = () => {
             border: '1px solid rgba(228,0,43,0.10)',
           }}
         >
-          <CardContent sx={{ p: 4 }}>
+          <CardContent sx={{ p: { xs: 2.5, sm: 4 } }}>
             <Typography
               variant="h6"
               sx={{ fontWeight: 700, mb: 0.5, color: '#1A1A1A' }}

@@ -1,0 +1,39 @@
+/* ── Global responsive base ─────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html, body {
+  margin: 0;
+  /* Never allow the page itself to scroll sideways */
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+#root {
+  overflow-x: hidden;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Smooth, momentum scrolling for any horizontally scrollable region (tables) */
+.MuiTableContainer-root {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Mobile (<= 767px) ──────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+  body {
+    line-height: 1.5;
+  }
+  /* Trim large animation durations a touch on mobile */
+  .MuiLinearProgress-bar {
+    transition-duration: 400ms !important;
+  }
+}

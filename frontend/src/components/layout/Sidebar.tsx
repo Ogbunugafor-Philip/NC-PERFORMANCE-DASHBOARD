@@ -4,13 +4,14 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import LeaderboardIcon from '@mui/icons-material/Leaderboard';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import { NavLink } from 'react-router-dom';
 import { SterlingLogo } from '../common/SterlingLogo';
 import type { UserPosition } from '../../types/auth';
 import type { ReactElement } from 'react';
 
-const width = 280;
+const FULL_WIDTH = 280;
+const COLLAPSED_WIDTH = 76;
 
 const menuByRole: Record<UserPosition, { label: string; path: string; icon: ReactElement }[]> = {
   ADMIN: [
@@ -36,12 +37,13 @@ const menuByRole: Record<UserPosition, { label: string; path: string; icon: Reac
   ]
 };
 
-export const Sidebar = ({ role, mobileOpen, onClose }: { role: UserPosition; mobileOpen: boolean; onClose: () => void }) => {
+export const Sidebar = ({ role, collapsed = false }: { role: UserPosition; collapsed?: boolean }) => {
+  const width = collapsed ? COLLAPSED_WIDTH : FULL_WIDTH;
   const drawer = (
     <Box sx={{ height: '100%', backgroundColor: '#1A1A1A', color: '#fff' }}>
       <Box
         sx={{
-          px: 2.5,
+          px: collapsed ? 1 : 2.5,
           py: 2,
           display: 'flex',
           flexDirection: 'column',
@@ -53,55 +55,57 @@ export const Sidebar = ({ role, mobileOpen, onClose }: { role: UserPosition; mob
           sx={{
             backgroundColor: '#fff',
             borderRadius: 1.5,
-            px: 2,
-            py: 1.25,
-            mb: 1.25,
+            px: collapsed ? 0.75 : 2,
+            py: collapsed ? 0.75 : 1.25,
+            mb: collapsed ? 0 : 1.25,
             width: '100%',
             display: 'flex',
             justifyContent: 'center',
           }}
         >
-          <SterlingLogo width={120} />
+          <SterlingLogo width={collapsed ? 40 : 120} />
         </Box>
-        <Typography sx={{ color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: '0.01em' }}>
-          NC Performance Dashboard
-        </Typography>
-        <Typography sx={{ color: '#9E9E9E', fontSize: 11, mt: 0.25 }}>
-          North Central Region
-        </Typography>
+        {!collapsed && (
+          <>
+            <Typography sx={{ color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: '0.01em' }}>
+              NC Performance Dashboard
+            </Typography>
+            <Typography sx={{ color: '#9E9E9E', fontSize: 11, mt: 0.25 }}>
+              North Central Region
+            </Typography>
+          </>
+        )}
       </Box>
-      <List sx={{ px: 1.5 }}>
+      <List sx={{ px: collapsed ? 0.75 : 1.5 }}>
         {menuByRole[role].map((item) => (
-          <ListItemButton
-            key={item.label}
-            component={NavLink}
-            to={item.path}
-            onClick={onClose}
-            sx={{
-              borderRadius: 1,
-              mb: 0.5,
-              color: '#D7D7D7',
-              '&.active': { backgroundColor: '#E4002B', color: '#fff' },
-              '&:hover': { backgroundColor: 'rgba(228,0,43,0.18)' }
-            }}
-          >
-            <ListItemIcon sx={{ color: 'inherit', minWidth: 38 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 800, fontSize: 14 }} />
-          </ListItemButton>
+          <Tooltip key={item.label} title={collapsed ? item.label : ''} placement="right" arrow>
+            <ListItemButton
+              component={NavLink}
+              to={item.path}
+              sx={{
+                borderRadius: 1,
+                mb: 0.5,
+                color: '#D7D7D7',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                px: collapsed ? 1 : 2,
+                '&.active': { backgroundColor: '#E4002B', color: '#fff' },
+                '&:hover': { backgroundColor: 'rgba(228,0,43,0.18)' }
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit', minWidth: collapsed ? 0 : 38, justifyContent: 'center' }}>{item.icon}</ListItemIcon>
+              {!collapsed && <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 800, fontSize: 14 }} />}
+            </ListItemButton>
+          </Tooltip>
         ))}
       </List>
     </Box>
   );
   return (
-    <>
-      <Drawer variant="temporary" open={mobileOpen} onClose={onClose} ModalProps={{ keepMounted: true }} sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width } }}>
-        {drawer}
-      </Drawer>
-      <Drawer variant="permanent" sx={{ display: { xs: 'none', md: 'block' }, '& .MuiDrawer-paper': { width, border: 0 } }} open>
-        {drawer}
-      </Drawer>
-    </>
+    <Drawer variant="permanent" sx={{ width, flexShrink: 0, '& .MuiDrawer-paper': { width, border: 0, boxSizing: 'border-box' } }} open>
+      {drawer}
+    </Drawer>
   );
 };
 
-export const sidebarWidth = width;
+export const sidebarWidth = FULL_WIDTH;
+export const collapsedSidebarWidth = COLLAPSED_WIDTH;

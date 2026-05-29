@@ -49,39 +49,43 @@ const borderColor = (score: number): string =>
 
 const pct = (n: number) => `${n}%`;
 
-// Column order matches the exact Excel header order.
+// Column order matches the exact Excel header order. minWidth keeps data readable
+// while the table scrolls horizontally on small screens.
 const baseCols = (showCluster: boolean) => [
-  { key: 'sn', label: 'S/N' },
-  { key: 'name', label: 'FSO Name' },
-  { key: 'dao_code', label: 'DAO Code' },
+  { key: 'sn', label: 'S/N', minWidth: 50 },
+  { key: 'name', label: 'FSO Name', minWidth: 150 },
+  { key: 'dao_code', label: 'DAO Code', minWidth: 100 },
   ...(showCluster
     ? [
-        { key: 'cluster_head', label: 'Cluster Head' },
-        { key: 'state_cluster', label: 'State Cluster' },
+        { key: 'cluster_head', label: 'Cluster Head', minWidth: 140 },
+        { key: 'state_cluster', label: 'State Cluster', minWidth: 100 },
       ]
     : []),
-  { key: 'ind_target', label: 'Ind Target' },
-  { key: 'ind_actual', label: 'Ind Actual' },
-  { key: 'ind_valid', label: 'Ind Valid' },
-  { key: 'ind_invalid', label: 'Ind Invalid' },
-  { key: 'ind_pct_invalid', label: 'Ind % Invalid', isPct: true },
-  { key: 'ind_pct_achievement', label: 'Ind % Achievement', isPct: true },
-  { key: 'ind_score', label: 'Ind Score' },
-  { key: 'ind_current_drr', label: 'Ind Current DRR' },
-  { key: 'ind_required_drr', label: 'Ind Required DRR' },
-  { key: 'bus_target', label: 'Bus Target' },
-  { key: 'bus_actual', label: 'Bus Actual' },
-  { key: 'bus_valid', label: 'Bus Valid' },
-  { key: 'bus_invalid', label: 'Bus Invalid' },
-  { key: 'bus_pct_invalid', label: 'Bus % Invalid', isPct: true },
-  { key: 'bus_pct_achievement', label: 'Bus % Achievement', isPct: true },
-  { key: 'bus_score', label: 'Bus Score' },
-  { key: 'bus_current_drr', label: 'Bus Current DRR' },
-  { key: 'bus_required_drr', label: 'Bus Required DRR' },
-  { key: 'final_scorecard', label: 'Final Scorecard' },
-  { key: 'position', label: 'Position' },
-  { key: 'status', label: 'Status' },
-] as { key: string; label: string; isPct?: boolean }[];
+  { key: 'ind_target', label: 'Ind Target', minWidth: 80 },
+  { key: 'ind_actual', label: 'Ind Actual', minWidth: 80 },
+  { key: 'ind_valid', label: 'Ind Valid', minWidth: 80 },
+  { key: 'ind_invalid', label: 'Ind Invalid', minWidth: 80 },
+  { key: 'ind_pct_invalid', label: 'Ind % Invalid', isPct: true, minWidth: 80 },
+  { key: 'ind_pct_achievement', label: 'Ind % Achievement', isPct: true, minWidth: 80 },
+  { key: 'ind_score', label: 'Ind Score', minWidth: 80 },
+  { key: 'ind_current_drr', label: 'Ind Current DRR', minWidth: 80 },
+  { key: 'ind_required_drr', label: 'Ind Required DRR', minWidth: 80 },
+  { key: 'bus_target', label: 'Bus Target', minWidth: 80 },
+  { key: 'bus_actual', label: 'Bus Actual', minWidth: 80 },
+  { key: 'bus_valid', label: 'Bus Valid', minWidth: 80 },
+  { key: 'bus_invalid', label: 'Bus Invalid', minWidth: 80 },
+  { key: 'bus_pct_invalid', label: 'Bus % Invalid', isPct: true, minWidth: 80 },
+  { key: 'bus_pct_achievement', label: 'Bus % Achievement', isPct: true, minWidth: 80 },
+  { key: 'bus_score', label: 'Bus Score', minWidth: 80 },
+  { key: 'bus_current_drr', label: 'Bus Current DRR', minWidth: 80 },
+  { key: 'bus_required_drr', label: 'Bus Required DRR', minWidth: 80 },
+  { key: 'final_scorecard', label: 'Final Scorecard', minWidth: 90 },
+  { key: 'position', label: 'Position', minWidth: 120 },
+  { key: 'status', label: 'Status', minWidth: 100 },
+] as { key: string; label: string; isPct?: boolean; minWidth: number }[];
+
+// First two columns stay pinned while scrolling horizontally.
+const STICKY_LEFT: Record<string, number> = { sn: 0, name: 50 };
 
 export function FSOLeaderboardTable({
   rows,
@@ -142,37 +146,37 @@ export function FSOLeaderboardTable({
 
   return (
     <Box>
-      {/* Filter bar */}
-      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2, alignItems: 'center' }}>
-        <TextField size="small" label="Search name or DAO code" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ minWidth: 220 }} />
+      {/* Filter bar — stacks vertically and goes full-width on mobile */}
+      <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mb: 2, alignItems: 'center', flexDirection: { xs: 'column', md: 'row' } }}>
+        <TextField fullWidth size="small" label="Search name or DAO code" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ width: { xs: '100%', md: 220 } }} />
         {showCluster && (
-          <TextField size="small" select label="Cluster Head" value={clusterHead} onChange={(e) => { setClusterHead(e.target.value); setPage(0); }} sx={{ minWidth: 180 }}>
+          <TextField fullWidth size="small" select label="Cluster Head" value={clusterHead} onChange={(e) => { setClusterHead(e.target.value); setPage(0); }} sx={{ width: { xs: '100%', md: 180 } }}>
             <MenuItem value="">All Cluster Heads</MenuItem>
             {clusterHeads.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
           </TextField>
         )}
         {showCluster && (
-          <TextField size="small" select label="State Cluster" value={stateCluster} onChange={(e) => { setStateCluster(e.target.value); setPage(0); }} sx={{ minWidth: 150 }}>
+          <TextField fullWidth size="small" select label="State Cluster" value={stateCluster} onChange={(e) => { setStateCluster(e.target.value); setPage(0); }} sx={{ width: { xs: '100%', md: 150 } }}>
             <MenuItem value="">All Clusters</MenuItem>
             {stateClusters.map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
           </TextField>
         )}
-        <TextField size="small" select label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }} sx={{ minWidth: 150 }}>
+        <TextField fullWidth size="small" select label="Status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(0); }} sx={{ width: { xs: '100%', md: 150 } }}>
           <MenuItem value="">All Statuses</MenuItem>
           {STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Sort by" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} sx={{ minWidth: 180 }}>
+        <TextField fullWidth size="small" select label="Sort by" value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} sx={{ width: { xs: '100%', md: 180 } }}>
           {SORT_OPTIONS.map((o) => <MenuItem key={o.value} value={o.value}>{o.label}</MenuItem>)}
         </TextField>
-        <TextField size="small" select label="Direction" value={desc ? 'desc' : 'asc'} onChange={(e) => setDesc(e.target.value === 'desc')} sx={{ minWidth: 150 }}>
+        <TextField fullWidth size="small" select label="Direction" value={desc ? 'desc' : 'asc'} onChange={(e) => setDesc(e.target.value === 'desc')} sx={{ width: { xs: '100%', md: 150 } }}>
           <MenuItem value="desc">Highest to Lowest</MenuItem>
           <MenuItem value="asc">Lowest to Highest</MenuItem>
         </TextField>
-        <Button startIcon={<RestartAltIcon />} onClick={reset} color="inherit">Reset</Button>
+        <Button startIcon={<RestartAltIcon />} onClick={reset} color="inherit" sx={{ width: { xs: '100%', md: 'auto' } }}>Reset</Button>
         <Button
           startIcon={<FileDownloadIcon />}
           variant="contained"
-          sx={{ ml: 'auto' }}
+          sx={{ ml: { md: 'auto' }, width: { xs: '100%', md: 'auto' } }}
           onClick={() => exportFsoLeaderboard(filtered, reportDateLabel, fileNameDate)}
         >
           Export to Excel
@@ -180,13 +184,27 @@ export function FSOLeaderboardTable({
       </Box>
 
       <Paper variant="outlined" sx={{ width: '100%', overflow: 'hidden' }}>
-        <TableContainer sx={{ maxHeight: 640, overflowX: 'auto' }}>
-          <Table stickyHeader size="small" sx={{ '& td, & th': { whiteSpace: 'nowrap' } }}>
+        <TableContainer sx={{ maxHeight: 640, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <Table stickyHeader size="small" sx={{ '& td, & th': { whiteSpace: 'nowrap', '@media (max-width:767px)': { fontSize: 12, padding: '6px 8px' } } }}>
             <TableHead>
               <TableRow>
-                {cols.map((c) => (
-                  <TableCell key={c.key} sx={{ fontWeight: 800, bgcolor: '#1A1A1A', color: '#fff' }}>{c.label}</TableCell>
-                ))}
+                {cols.map((c) => {
+                  const stickyLeft = STICKY_LEFT[c.key];
+                  return (
+                    <TableCell
+                      key={c.key}
+                      sx={{
+                        fontWeight: 800,
+                        bgcolor: '#1A1A1A',
+                        color: '#fff',
+                        minWidth: c.minWidth,
+                        ...(stickyLeft !== undefined && { position: 'sticky', left: stickyLeft, zIndex: 4, bgcolor: '#1A1A1A' }),
+                      }}
+                    >
+                      {c.label}
+                    </TableCell>
+                  );
+                })}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -194,6 +212,14 @@ export function FSOLeaderboardTable({
                 const sn = page * rowsPerPage + i + 1;
                 const isTop = row.rank > 0 && row.rank <= 3;
                 const isBottom = row.rank > 0 && row.rank > total - 3;
+                const stripeBg = i % 2 === 1 ? '#FAFAFA' : '#fff';
+                const cellSx = (c: { key: string; minWidth: number }) => {
+                  const stickyLeft = STICKY_LEFT[c.key];
+                  return {
+                    minWidth: c.minWidth,
+                    ...(stickyLeft !== undefined && { position: 'sticky' as const, left: stickyLeft, zIndex: 1, bgcolor: stripeBg }),
+                  };
+                };
                 return (
                   <TableRow
                     key={row.user_id}
@@ -206,7 +232,7 @@ export function FSOLeaderboardTable({
                     {cols.map((c) => {
                       if (c.key === 'sn') {
                         return (
-                          <TableCell key="sn">
+                          <TableCell key="sn" sx={cellSx(c)}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                               {isTop && <Tooltip title="Top performer"><EmojiEventsIcon sx={{ color: '#D4AF37', fontSize: 18 }} /></Tooltip>}
                               {isBottom && <Tooltip title="Needs attention"><WarningIcon sx={{ color: '#E4002B', fontSize: 18 }} /></Tooltip>}
@@ -216,10 +242,10 @@ export function FSOLeaderboardTable({
                         );
                       }
                       if (c.key === 'status') {
-                        return <TableCell key="status"><StatusBadge status={row.status} /></TableCell>;
+                        return <TableCell key="status" sx={cellSx(c)}><StatusBadge status={row.status} /></TableCell>;
                       }
                       const value = (row as unknown as Record<string, unknown>)[c.key];
-                      return <TableCell key={c.key}>{c.isPct ? pct(Number(value)) : String(value ?? '')}</TableCell>;
+                      return <TableCell key={c.key} sx={cellSx(c)}>{c.isPct ? pct(Number(value)) : String(value ?? '')}</TableCell>;
                     })}
                   </TableRow>
                 );
