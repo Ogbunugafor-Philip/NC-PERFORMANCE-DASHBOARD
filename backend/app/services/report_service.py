@@ -1,15 +1,19 @@
+import logging
 import re
 from collections import Counter
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app.models.report import PerformanceData, Report
+from app.models.insight import AIInsight
+from app.models.report import PerformanceData, ProcessedPerformance, Report
 from app.models.user import User, UserPosition
 from app.schemas.reports import UploadValidation
 from app.utils.excel_parser import normalize_dao_code
+
+logger = logging.getLogger(__name__)
 
 
 def _norm_name(value: str) -> str:
@@ -101,99 +105,134 @@ def create_report(
     uploaded_by: User,
     file_path: str | None = None,
 ) -> tuple[Report, UploadValidation, int]:
-    """Fully-automatic upload pipeline.
+    """Fully-automatic upload with smart FSO sync.
 
-    Every FSO row is imported. If a DAO code is unknown it is auto-registered
-    as an FSO and linked to its Cluster Head (Column G), creating the Cluster
-    Head too when necessary. The upload is never blocked on unmatched users.
+    RULE 1  new FSO (in Excel, not in DB)      → auto-register, link to Cluster Head
+    RULE 2  existing FSO (in Excel and DB)      → keep login details; only refresh
+                                                  name + cluster_head_id (+ state)
+    RULE 3  terminated FSO (in DB, not in Excel)→ delete the FSO and its data
+            (only position == FSO; never Admin/RSM/Cluster Head)
+
+    All mutations run in a single transaction — any failure rolls back everything.
     """
-    # Existing FSO/user lookup by DAO code
-    existing: dict[str, User] = {
-        u.dao_code: u for u in db.scalars(select(User)).all()
-    }
-    head_resolver = ClusterHeadResolver(db)
+    try:
+        # Existing user lookup by DAO code
+        existing: dict[str, User] = {
+            u.dao_code: u for u in db.scalars(select(User)).all()
+        }
+        head_resolver = ClusterHeadResolver(db)
 
-    counts = Counter(normalize_dao_code(r["dao_code"]) for r in rows if r.get("dao_code"))
-    duplicate_dao_codes = sorted([c for c, n in counts.items() if n > 1])
+        counts = Counter(normalize_dao_code(r["dao_code"]) for r in rows if r.get("dao_code"))
+        duplicate_dao_codes = sorted([c for c, n in counts.items() if n > 1])
 
-    new_fsos = 0
-    updated_fsos = 0
-    seen_codes: set[str] = set()
-    import_rows: list[tuple[User, dict]] = []
-    matched_codes: list[str] = []
+        new_fsos = 0
+        updated_fsos = 0
+        seen_codes: set[str] = set()
+        import_rows: list[tuple[User, dict]] = []
+        matched_codes: list[str] = []
+        new_fso_list: list[str] = []
 
-    for row in rows:
-        dao_code = normalize_dao_code(row["dao_code"])
-        if not dao_code or dao_code in seen_codes:
-            continue
-        seen_codes.add(dao_code)
+        # ── Steps 4 & 5 — register new (Rule 1) / refresh existing (Rule 2) ──
+        for row in rows:
+            dao_code = normalize_dao_code(row["dao_code"])
+            if not dao_code or dao_code in seen_codes:
+                continue
+            seen_codes.add(dao_code)
 
-        name = " ".join(str(row.get("name", "")).split())
-        state_cluster = (row.get("state_cluster") or "").strip()
-        head = head_resolver.resolve(row.get("cluster_head", ""), state_cluster)
+            name = " ".join(str(row.get("name", "")).split())
+            state_cluster = (row.get("state_cluster") or "").strip()
+            head = head_resolver.resolve(row.get("cluster_head", ""), state_cluster)
 
-        user = existing.get(dao_code)
-        if user is None:
-            # ── Auto-register a brand-new FSO ──
-            user = User(
-                name=name or dao_code,
-                dao_code=dao_code,
-                position=UserPosition.FSO,
-                is_active=True,
-                is_first_login=True,
-                cluster_head_id=head.id if head else None,
-                cluster_name=state_cluster or None,
-            )
-            db.add(user)
+            user = existing.get(dao_code)
+            if user is None:
+                user = User(
+                    name=name or dao_code,
+                    dao_code=dao_code,
+                    position=UserPosition.FSO,
+                    email=None,
+                    is_active=True,
+                    is_first_login=True,
+                    cluster_head_id=head.id if head else None,
+                    cluster_name=state_cluster or None,
+                )
+                db.add(user)
+                db.flush()
+                existing[dao_code] = user
+                new_fsos += 1
+                new_fso_list.append(f"{user.name} ({dao_code})")
+                logger.info("New FSO registered: %s %s", user.name, dao_code)
+            else:
+                # Rule 2: NEVER touch email / password / is_first_login.
+                if name and user.name != name:
+                    user.name = name
+                    updated_fsos += 1
+                if head and user.cluster_head_id != head.id:
+                    user.cluster_head_id = head.id
+                if state_cluster and user.cluster_name != state_cluster:
+                    user.cluster_name = state_cluster
+                logger.info("Existing FSO kept: %s %s", user.name, dao_code)
+
+            matched_codes.append(dao_code)
+            import_rows.append((user, row))
+
+        excel_dao_codes = set(seen_codes)
+
+        # ── Step 6 — Rule 3: remove terminated FSOs (only position == FSO) ──
+        # Guard: never wipe FSOs when the Excel had no usable rows.
+        terminated_fso_list: list[str] = []
+        if excel_dao_codes:
+            terminated_fsos = db.scalars(
+                select(User).where(
+                    User.position == UserPosition.FSO,
+                    User.dao_code.notin_(excel_dao_codes),
+                )
+            ).all()
+            for fso in terminated_fsos:
+                terminated_fso_list.append(f"{fso.name} ({fso.dao_code})")
+                logger.info("FSO removed (not in Excel): %s %s", fso.name, fso.dao_code)
+                # Explicitly clear dependent data (also enforced by ON DELETE CASCADE)
+                db.execute(delete(AIInsight).where(AIInsight.user_id == fso.id))
+                db.execute(delete(ProcessedPerformance).where(ProcessedPerformance.user_id == fso.id))
+                db.execute(delete(PerformanceData).where(PerformanceData.user_id == fso.id))
+                db.delete(fso)
             db.flush()
-            existing[dao_code] = user
-            new_fsos += 1
-        else:
-            # ── Use existing user, refresh details ──
-            changed = False
-            if name and user.name != name:
-                user.name = name
-                changed = True
-            if head and user.cluster_head_id != head.id:
-                user.cluster_head_id = head.id
-                changed = True
-            if state_cluster and user.cluster_name != state_cluster:
-                user.cluster_name = state_cluster
-                changed = True
-            if changed:
-                updated_fsos += 1
 
-        matched_codes.append(dao_code)
-        import_rows.append((user, row))
-
-    # Deactivate previous reports and create the new active report
-    db.execute(update(Report).values(is_active=False))
-    report = Report(
-        report_date=report_date,
-        uploaded_by=uploaded_by.id,
-        is_active=True,
-        file_path=file_path,
-    )
-    db.add(report)
-    db.flush()
-
-    for user, row in import_rows:
-        db.add(
-            PerformanceData(
-                report_id=report.id,
-                user_id=user.id,
-                dao_code=user.dao_code,
-                ind_target=row["ind_target"],
-                ind_actual=row["ind_actual"],
-                ind_valid=row["ind_valid"],
-                bus_target=row["bus_target"],
-                bus_actual=row["bus_actual"],
-                bus_valid=row["bus_valid"],
-            )
+        # ── Step 7 — deactivate prior reports, create new report + performance data ──
+        db.execute(update(Report).values(is_active=False))
+        report = Report(
+            report_date=report_date,
+            uploaded_by=uploaded_by.id,
+            is_active=True,
+            file_path=file_path,
         )
-    db.commit()
-    db.refresh(report)
+        db.add(report)
+        db.flush()
 
+        for user, row in import_rows:
+            db.add(
+                PerformanceData(
+                    report_id=report.id,
+                    user_id=user.id,
+                    dao_code=user.dao_code,
+                    ind_target=row["ind_target"],
+                    ind_actual=row["ind_actual"],
+                    ind_valid=row["ind_valid"],
+                    bus_target=row["bus_target"],
+                    bus_actual=row["bus_actual"],
+                    bus_valid=row["bus_valid"],
+                )
+            )
+        db.commit()
+        db.refresh(report)
+    except Exception:
+        db.rollback()
+        logger.exception("Report upload failed — rolled back")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Upload failed and was rolled back. No changes were saved.",
+        )
+
+    # ── Step 8 — full calculation pipeline (KPIs, rankings, aggregation) ──
     from app.services.performance_processor import ProcessorService
 
     ProcessorService(db).run_full_pipeline(report)
@@ -208,9 +247,17 @@ def create_report(
         duplicate_dao_codes=duplicate_dao_codes,
         new_fsos_registered=new_fsos,
         existing_fsos_updated=updated_fsos,
+        existing_fsos_kept=len(import_rows) - new_fsos,
+        terminated_fsos_removed=len(terminated_fso_list),
         cluster_heads_created=len(head_resolver.created),
+        new_fso_list=new_fso_list,
+        terminated_fso_list=terminated_fso_list,
         calculations_complete=True,
         rankings_updated=True,
+    )
+    logger.info(
+        "Sync complete — %s new, %s kept, %s removed",
+        new_fsos, len(import_rows) - new_fsos, len(terminated_fso_list),
     )
     return report, validation, len(import_rows)
 

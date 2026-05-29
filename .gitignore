@@ -12,3 +12,6 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+
+# Uploaded report files (runtime data, contains real FSO data)
+backend/uploads/

@@ -323,8 +323,9 @@ export const PerformanceUpload = () => {
                     <List dense>
                       <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Report date" secondary={`New to Bank Report as at ${result.report_date_extracted}`} /></ListItem>
                       <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Total FSO rows imported" secondary={`${result.total_records}`} /></ListItem>
-                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="New FSOs auto-registered" secondary={`${result.new_fsos_registered}`} /></ListItem>
-                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Existing FSOs updated" secondary={`${result.existing_fsos_updated}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="New FSOs registered" secondary={result.new_fso_list?.length ? result.new_fso_list.join(', ') : `${result.new_fsos_registered}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Existing FSOs kept (login details untouched)" secondary={`${result.existing_fsos_kept}`} /></ListItem>
+                      <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Terminated FSOs removed (not in Excel)" secondary={result.terminated_fso_list?.length ? result.terminated_fso_list.join(', ') : `${result.terminated_fsos_removed}`} /></ListItem>
                       {result.cluster_heads_created > 0 && <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Cluster Heads auto-created" secondary={`${result.cluster_heads_created}`} /></ListItem>}
                       <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="All KPIs calculated" secondary={result.calculations_complete ? 'Complete' : 'Pending'} /></ListItem>
                       <ListItem><ListItemIcon><CheckCircleIcon color="success" /></ListItemIcon><ListItemText primary="Rankings updated" secondary={result.rankings_updated ? 'Complete' : 'Pending'} /></ListItem>

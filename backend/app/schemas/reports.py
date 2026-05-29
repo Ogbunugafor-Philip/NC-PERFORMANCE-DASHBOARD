@@ -46,7 +46,11 @@ class UploadValidation(BaseModel):
     missing_required_fields: list[str] = []
     new_fsos_registered: int = 0
     existing_fsos_updated: int = 0
+    existing_fsos_kept: int = 0
+    terminated_fsos_removed: int = 0
     cluster_heads_created: int = 0
+    new_fso_list: list[str] = []
+    terminated_fso_list: list[str] = []
     calculations_complete: bool = False
     rankings_updated: bool = False
 
