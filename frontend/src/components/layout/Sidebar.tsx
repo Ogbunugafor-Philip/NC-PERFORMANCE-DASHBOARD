@@ -4,7 +4,7 @@ import InsightsIcon from '@mui/icons-material/Insights';
 import LeaderboardIcon from '@mui/icons-material/Leaderboard';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import AssessmentIcon from '@mui/icons-material/Assessment';
-import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Toolbar } from '@mui/material';
+import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { NavLink } from 'react-router-dom';
 import { SterlingLogo } from '../common/SterlingLogo';
 import type { UserPosition } from '../../types/auth';
@@ -41,11 +41,37 @@ const menuByRole: Record<UserPosition, { label: string; path: string; icon: Reac
 export const Sidebar = ({ role, mobileOpen, onClose }: { role: UserPosition; mobileOpen: boolean; onClose: () => void }) => {
   const drawer = (
     <Box sx={{ height: '100%', backgroundColor: '#1A1A1A', color: '#fff' }}>
-      <Toolbar sx={{ px: 2.5, height: 76 }}>
-        <Box sx={{ '& p, & span': { color: '#fff' }, backgroundColor: '#fff', borderRadius: 1, p: 1, width: '100%' }}>
-          <SterlingLogo compact />
+      <Box
+        sx={{
+          px: 2.5,
+          py: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        <Box
+          sx={{
+            backgroundColor: '#fff',
+            borderRadius: 1.5,
+            px: 2,
+            py: 1.25,
+            mb: 1.25,
+            width: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <SterlingLogo width={120} />
         </Box>
-      </Toolbar>
+        <Typography sx={{ color: '#fff', fontSize: 13, fontWeight: 600, letterSpacing: '0.01em' }}>
+          NC Performance Dashboard
+        </Typography>
+        <Typography sx={{ color: '#9E9E9E', fontSize: 11, mt: 0.25 }}>
+          North Central Region
+        </Typography>
+      </Box>
       <List sx={{ px: 1.5 }}>
         {menuByRole[role].map((item) => (
           <ListItemButton
