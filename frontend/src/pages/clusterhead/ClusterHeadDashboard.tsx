@@ -1,102 +1,163 @@
-import { Alert, Box, Card, CardContent, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Card, CardContent, Chip, Tab, Tabs, Typography } from '@mui/material';
 import Grid from '@mui/material/GridLegacy';
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
-import { getClusterMe, getClusterTeam, getFsoMe } from '../../api/dashboard';
-import { TeamComparisonChart } from '../../components/charts/TeamComparisonChart';
+import { useMemo, useState } from 'react';
+import { getClusterMe, getClusterTeamFull } from '../../api/dashboard';
+import { AchievementGauge } from '../../components/charts/AchievementGauge';
+import { DonutChart, HorizontalAchievementBar } from '../../components/charts/DashboardCharts';
 import { AIInsightCard } from '../../components/common/AIInsightCard';
 import { DashboardErrorState, DashboardSkeleton, EmptyReportState } from '../../components/common/DashboardStates';
-import { DataTable } from '../../components/common/DataTable';
 import { DRRComparisonCard } from '../../components/common/DRRComparisonCard';
+import { FSOLeaderboardTable, type FsoRow } from '../../components/common/FSOLeaderboardTable';
 import { KPICard } from '../../components/common/KPICard';
-import { LeaderboardRow } from '../../components/common/LeaderboardRow';
+import { ProgressBar } from '../../components/common/ProgressBar';
 import { RankingCard } from '../../components/common/RankingCard';
 import { ScorecardCard } from '../../components/common/ScorecardCard';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { PageWrapper } from '../../components/layout/PageWrapper';
-import { formatDate, formatPercent } from '../../utils/formatters';
-import { AccountPerformanceSection } from '../fso/FSODashboard';
+import { ReportBanner } from '../rsm/RSMDashboard';
+import { AccountPerformanceSection, type AccountMetric } from '../fso/FSODashboard';
 
-const teamMetric = (metric: any) => ({
-  ...metric,
-  invalid_count: Math.max((metric.actual || 0) - (metric.valid || 0), 0),
-  percentage_invalid: metric.actual ? Math.round((Math.max(metric.actual - metric.valid, 0) / metric.actual) * 100) : 0,
-  accounts_outstanding: (metric.target || 0) - (metric.valid || 0)
-});
+const fileDate = (iso: string) => String(iso).split('T')[0];
 
-export const TeamLeaderboard = ({ rows }: { rows: Record<string, unknown>[] }) => (
-  <DataTable
-    searchable
-    colorRows
-    exportFileName="NC_Performance_Team_Leaderboard.xlsx"
-    rows={rows}
-    columns={[
-      { key: 'rank', label: 'Rank' },
-      { key: 'name', label: 'Name' },
-      { key: 'dao_code', label: 'DAO Code' },
-      { key: 'ind_target', label: 'Ind Target', render: (row) => String((row.individual as any)?.target ?? '') },
-      { key: 'ind_valid', label: 'Ind Valid', render: (row) => String((row.individual as any)?.valid ?? '') },
-      { key: 'ind', label: 'Ind %', render: (row) => formatPercent(Number((row.individual as any)?.percentage_achievement ?? row.ind_percentage_achievement ?? 0)) },
-      { key: 'bus_target', label: 'Bus Target', render: (row) => String((row.business as any)?.target ?? '') },
-      { key: 'bus_valid', label: 'Bus Valid', render: (row) => String((row.business as any)?.valid ?? '') },
-      { key: 'bus', label: 'Bus %', render: (row) => formatPercent(Number((row.business as any)?.percentage_achievement ?? row.bus_percentage_achievement ?? 0)) },
-      { key: 'final_scorecard', label: 'Scorecard' },
-      { key: 'status', label: 'Status', render: (row) => <StatusBadge status={(row.individual as any)?.status || 'ON TRACK'} /> }
-    ]}
-  />
-);
+// Adapt the cluster/me metric (team aggregate) into the full AccountMetric shape.
+const toMetric = (m: any): AccountMetric => {
+  const invalid = Math.max((m.actual || 0) - (m.valid || 0), 0);
+  return {
+    target: m.target || 0,
+    actual: m.actual || 0,
+    valid: m.valid || 0,
+    invalid_count: invalid,
+    percentage_invalid: m.actual ? Math.round((invalid / m.actual) * 100) : 0,
+    percentage_achievement: m.percentage_achievement || 0,
+    current_drr: m.current_drr || 0,
+    required_drr: m.required_drr || 0,
+    accounts_outstanding: Math.max((m.target || 0) - (m.valid || 0), 0),
+    status: m.status || 'CRITICAL',
+    drr_status: m.drr_status || 'BEHIND PACE',
+  };
+};
+
+const PerformerCard = ({ row, place, rank }: { row: FsoRow; place: 'top' | 'bottom'; rank: number }) => {
+  const colors: Record<number, string> = { 1: '#D4AF37', 2: '#9E9E9E', 3: '#CD7F32' };
+  const color = place === 'top' ? (colors[rank] || '#00A651') : '#E4002B';
+  return (
+    <Card sx={{ borderTop: `5px solid ${color}`, bgcolor: place === 'bottom' ? 'rgba(228,0,43,0.04)' : undefined, height: '100%' }}>
+      <CardContent>
+        <Chip size="small" label={`#${row.rank} • ${row.dao_code}`} sx={{ bgcolor: color, color: '#fff', fontWeight: 800, mb: 1 }} />
+        <Typography fontWeight={900}>{row.name}</Typography>
+        <Typography variant="h4" fontWeight={900} sx={{ color }}>{row.final_scorecard}</Typography>
+        <Typography variant="caption" color="text.secondary">Ind {row.ind_pct_achievement}% • Bus {row.bus_pct_achievement}%</Typography>
+      </CardContent>
+    </Card>
+  );
+};
 
 export const ClusterHeadDashboard = () => {
   const [tab, setTab] = useState(0);
   const me = useQuery({ queryKey: ['dashboard-cluster-me'], queryFn: getClusterMe, staleTime: 5 * 60 * 1000 });
-  const team = useQuery({ queryKey: ['dashboard-cluster-team'], queryFn: getClusterTeam, staleTime: 5 * 60 * 1000 });
+  const team = useQuery({ queryKey: ['dashboard-cluster-team-full'], queryFn: getClusterTeamFull, staleTime: 5 * 60 * 1000 });
+
+  const teamRows: FsoRow[] = (team.data || []) as FsoRow[];
+  const top3 = useMemo(() => [...teamRows].sort((a, b) => b.final_scorecard - a.final_scorecard).slice(0, 3), [teamRows]);
+  const bottom3 = useMemo(() => [...teamRows].sort((a, b) => a.final_scorecard - b.final_scorecard).slice(0, 3), [teamRows]);
+  const indAch = useMemo(() => teamRows.map((f) => ({ name: f.name, value: f.ind_pct_achievement })), [teamRows]);
+  const busAch = useMemo(() => teamRows.map((f) => ({ name: f.name, value: f.bus_pct_achievement })), [teamRows]);
+
   if (me.isLoading || team.isLoading) return <DashboardSkeleton />;
   if (me.error) return <DashboardErrorState onRetry={() => { me.refetch(); team.refetch(); }} />;
   if (me.data?.empty) return <EmptyReportState />;
-  const rows = (team.data || []) as any[];
-  const top = rows.slice(0, 5);
-  const bottom = rows.slice(-5).reverse();
+
+  const d = me.data;
+  const ind = toMetric(d.individual);
+  const bus = toMetric(d.business);
+  const overall = Math.round((ind.percentage_achievement + bus.percentage_achievement) / 2);
+
   return (
-    <PageWrapper title="My Team" subtitle={`New to Bank Report as at ${formatDate(me.data.report_date)}`}>
-      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }}><Tab label="My Performance" /><Tab label="My Team" /></Tabs>
-      <Box sx={{ bgcolor: '#E4002B', color: '#fff', p: 2.5, borderRadius: 2, mb: 2.5 }}>
-        <Typography variant="h5">Team Scorecard {me.data.team_scorecard} | Team Rank {me.data.rank_ordinal} | Total FSOs {me.data.total_fso_count}</Typography>
-      </Box>
-      <Grid container spacing={2.5}>
-        {tab === 0 && (
-          <>
-            <Grid item xs={12} lg={4}><ScorecardCard scorecard={me.data.team_scorecard} grade={me.data.scorecard_grade} /></Grid>
-            <Grid item xs={12} lg={4}><RankingCard rank={me.data.rank_ordinal} total={Math.max(me.data.rank || 0, 1)} type="Cluster Head" /></Grid>
-            <Grid item xs={12} lg={4}><KPICard title="Total FSOs" value={me.data.total_fso_count} color="#1A1A1A" /></Grid>
-            <Grid item xs={12}><AccountPerformanceSection title="Team Individual Accounts" metric={teamMetric(me.data.individual)} /></Grid>
-            <Grid item xs={12}><AccountPerformanceSection title="Team Business Accounts" metric={teamMetric(me.data.business)} /></Grid>
-            <Grid item xs={12}>
-              <AIInsightCard source="me" title="Performance Insight" />
-            </Grid>
-          </>
-        )}
-        {tab === 1 && (
-          <>
-        <Grid item xs={12} sm={6} lg={3}><KPICard title="Total Team Target" value={me.data.individual.target + me.data.business.target} /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><KPICard title="Total Team Valid" value={me.data.individual.valid + me.data.business.valid} color="#00A651" /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><KPICard title="Team Achievement %" value={formatPercent(me.data.team_scorecard)} color="#FFC107" /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><ScorecardCard scorecard={me.data.team_scorecard} grade={me.data.scorecard_grade} /></Grid>
-        <Grid item xs={12} lg={6}><RankingCard rank={me.data.rank_ordinal} total={Math.max(me.data.rank || 0, 1)} type="Cluster Head" /></Grid>
-        <Grid item xs={12} lg={6}><DRRComparisonCard currentDRR={me.data.individual.current_drr} requiredDRR={me.data.individual.required_drr} label="Team Individual Accounts" /></Grid>
-        <Grid item xs={12} lg={6}><DRRComparisonCard currentDRR={me.data.business.current_drr} requiredDRR={me.data.business.required_drr} label="Team Business Accounts" /></Grid>
-        <Grid item xs={12} lg={6}><AccountPerformanceSection title="Team Individual Accounts" metric={teamMetric(me.data.individual)} /></Grid>
-        <Grid item xs={12} lg={6}><AccountPerformanceSection title="Team Business Accounts" metric={teamMetric(me.data.business)} /></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Individual Achievement</Typography><TeamComparisonChart fsoList={rows} metric="indAchievement" /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Business Achievement</Typography><TeamComparisonChart fsoList={rows} metric="busAchievement" /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Top 5 Performers</Typography><Box sx={{ display: 'grid', gap: 1 }}>{top.map((r) => <LeaderboardRow key={r.dao_code} rank={r.rank} name={r.name} daoCode={r.dao_code} indAchievement={r.individual.percentage_achievement} busAchievement={r.business.percentage_achievement} scorecard={r.final_scorecard} />)}</Box></CardContent></Card></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Needs Attention</Typography><Box sx={{ display: 'grid', gap: 1 }}>{bottom.map((r) => <LeaderboardRow key={r.dao_code} rank={r.rank} name={r.name} daoCode={r.dao_code} indAchievement={r.individual.percentage_achievement} busAchievement={r.business.percentage_achievement} scorecard={r.final_scorecard} />)}</Box></CardContent></Card></Grid>
-        <Grid item xs={12}><Card><CardContent><Typography variant="h6">Full Team Leaderboard</Typography><TeamLeaderboard rows={rows} /></CardContent></Card></Grid>
-        <Grid item xs={12}>
-          <AIInsightCard source="me" title="Team Performance Insight" />
+    <PageWrapper title="Cluster Head Dashboard" subtitle={`New to Bank Report as at ${d.report_date_label}`}>
+      <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
+        <Tab label="My Performance" />
+        <Tab label="Team Summary" />
+        <Tab label="My Team" />
+      </Tabs>
+
+      {/* ── TAB 1 — MY PERFORMANCE ── */}
+      {tab === 0 && (
+        <Grid container spacing={2.5}>
+          <Grid item xs={12}><ReportBanner label={d.report_date_label} /></Grid>
+          <Grid item xs={12} lg={4}><ScorecardCard scorecard={d.team_scorecard} grade={d.scorecard_grade} /></Grid>
+          <Grid item xs={12} lg={4}><RankingCard rank={d.rank_ordinal} total={d.rank_total} type="Cluster Head" /></Grid>
+          <Grid item xs={12} lg={4}><Card><CardContent><AchievementGauge value={d.team_scorecard} label="Overall Scorecard" /></CardContent></Card></Grid>
+          <Grid item xs={12}><AccountPerformanceSection title="Individual Accounts" metric={ind} /></Grid>
+          <Grid item xs={12}><AccountPerformanceSection title="Business Accounts" metric={bus} /></Grid>
+          <Grid item xs={12}><AIInsightCard source="me" title="Your Performance Insight" /></Grid>
         </Grid>
-          </>
-        )}
-      </Grid>
+      )}
+
+      {/* ── TAB 2 — TEAM SUMMARY ── */}
+      {tab === 1 && (
+        <Grid container spacing={2.5}>
+          <Grid item xs={12} sm={6} lg={3}><ScorecardCard scorecard={d.team_scorecard} grade={d.scorecard_grade} /></Grid>
+          <Grid item xs={12} sm={6} lg={3}><RankingCard rank={d.rank_ordinal} total={d.rank_total} type="Cluster Head" /></Grid>
+          <Grid item xs={12} sm={6} lg={3}><KPICard title="State Cluster" value={d.state_cluster} color="#1A1A1A" /></Grid>
+          <Grid item xs={12} sm={6} lg={3}><KPICard title="Total FSOs" value={d.total_fso_count} /></Grid>
+
+          <Grid item xs={12}>
+            <Card><CardContent>
+              <Typography variant="h6" sx={{ mb: 1.5 }}>Team Individual <StatusBadge status={ind.status} /></Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                <KPICard title="Target" value={ind.target.toLocaleString()} color="#1976D2" />
+                <KPICard title="Actual" value={ind.actual.toLocaleString()} color="#777" />
+                <KPICard title="Valid" value={ind.valid.toLocaleString()} color="#00A651" />
+                <KPICard title="Invalid" value={ind.invalid_count.toLocaleString()} color="#E4002B" />
+                <KPICard title="% Invalid" value={`${ind.percentage_invalid}%`} color="#E4002B" />
+                <KPICard title="% Achievement" value={`${ind.percentage_achievement}%`} color={ind.percentage_achievement >= 80 ? '#00A651' : ind.percentage_achievement >= 50 ? '#FFC107' : '#E4002B'} />
+                <KPICard title="Current DRR" value={ind.current_drr} color="#1A1A1A" />
+                <KPICard title="Required DRR" value={ind.required_drr} color="#E4002B" />
+              </Box>
+              <Box sx={{ mt: 2 }}><ProgressBar value={ind.valid} max={ind.target || 1} label="Individual Achievement" /></Box>
+            </CardContent></Card>
+          </Grid>
+
+          <Grid item xs={12}>
+            <Card><CardContent>
+              <Typography variant="h6" sx={{ mb: 1.5 }}>Team Business <StatusBadge status={bus.status} /></Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 2 }}>
+                <KPICard title="Target" value={bus.target.toLocaleString()} color="#1976D2" />
+                <KPICard title="Actual" value={bus.actual.toLocaleString()} color="#777" />
+                <KPICard title="Valid" value={bus.valid.toLocaleString()} color="#00A651" />
+                <KPICard title="Invalid" value={bus.invalid_count.toLocaleString()} color="#E4002B" />
+                <KPICard title="% Invalid" value={`${bus.percentage_invalid}%`} color="#E4002B" />
+                <KPICard title="% Achievement" value={`${bus.percentage_achievement}%`} color={bus.percentage_achievement >= 80 ? '#00A651' : bus.percentage_achievement >= 50 ? '#FFC107' : '#E4002B'} />
+                <KPICard title="Current DRR" value={bus.current_drr} color="#1A1A1A" />
+                <KPICard title="Required DRR" value={bus.required_drr} color="#E4002B" />
+              </Box>
+              <Box sx={{ mt: 2 }}><ProgressBar value={bus.valid} max={bus.target || 1} label="Business Achievement" /></Box>
+            </CardContent></Card>
+          </Grid>
+
+          <Grid item xs={12} md={6}><Card><CardContent><DonutChart valid={ind.valid} invalid={ind.invalid_count} title="Team Individual — Valid vs Invalid" /></CardContent></Card></Grid>
+          <Grid item xs={12} md={6}><Card><CardContent><DonutChart valid={bus.valid} invalid={bus.invalid_count} title="Team Business — Valid vs Invalid" /></CardContent></Card></Grid>
+          <Grid item xs={12} lg={6}><Card><CardContent><HorizontalAchievementBar data={indAch} title="All FSOs — Ind % Achievement" /></CardContent></Card></Grid>
+          <Grid item xs={12} lg={6}><Card><CardContent><HorizontalAchievementBar data={busAch} title="All FSOs — Bus % Achievement" /></CardContent></Card></Grid>
+
+          <Grid item xs={12}><Typography variant="h6" fontWeight={900}>Top 3 Performers</Typography></Grid>
+          {top3.map((r, i) => <Grid item xs={12} md={4} key={r.user_id}><PerformerCard row={r} place="top" rank={i + 1} /></Grid>)}
+          <Grid item xs={12}><Typography variant="h6" fontWeight={900}>Needs Attention — Bottom 3 Performers</Typography></Grid>
+          {bottom3.map((r, i) => <Grid item xs={12} md={4} key={r.user_id}><PerformerCard row={r} place="bottom" rank={i + 1} /></Grid>)}
+
+          <Grid item xs={12}><DRRComparisonCard currentDRR={ind.current_drr} requiredDRR={ind.required_drr} label="Team Individual DRR" /></Grid>
+          <Grid item xs={12}><AIInsightCard source="me" title="Team Performance Insight" /></Grid>
+        </Grid>
+      )}
+
+      {/* ── TAB 3 — MY TEAM ── */}
+      {tab === 2 && (
+        <Card><CardContent>
+          <Typography variant="h6" sx={{ mb: 1.5 }}>My Team — {teamRows.length} FSOs</Typography>
+          <FSOLeaderboardTable rows={teamRows} reportDateLabel={d.report_date_label} fileNameDate={fileDate(d.report_date)} variant="team" />
+        </CardContent></Card>
+      )}
     </PageWrapper>
   );
 };

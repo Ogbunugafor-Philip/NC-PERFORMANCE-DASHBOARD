@@ -78,7 +78,7 @@ def update_user_admin(db: Session, user: User, payload: UserUpdate) -> User:
     if "email" in data:
         ensure_unique_email(db, str(data["email"]) if data["email"] else None, user.id)
         user.email = str(data["email"]).lower() if data["email"] else None
-    for field in ("name", "position", "cluster_head_id", "is_active"):
+    for field in ("name", "position", "cluster_head_id", "cluster_name", "is_active"):
         if field in data:
             setattr(user, field, data[field])
     db.commit()

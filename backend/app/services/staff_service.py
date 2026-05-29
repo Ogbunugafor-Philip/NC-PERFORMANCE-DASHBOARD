@@ -24,6 +24,7 @@ def create_staff(db: Session, payload: StaffCreate) -> User:
         dao_code=dao_code,
         position=payload.position,
         cluster_head_id=payload.cluster_head_id if payload.position == UserPosition.FSO else None,
+        cluster_name=payload.cluster_name.strip() if payload.cluster_name else None,
     )
     db.add(user)
     db.commit()

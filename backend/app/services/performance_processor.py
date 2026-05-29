@@ -82,8 +82,12 @@ class ProcessorService:
                 bus_required_drr=self.calculator.calculate_required_daily_run_rate(
                     bus_outstanding, active_report.report_date
                 ),
-                ind_score=int(self.calculator.calculate_scorecard_component(ind_achievement)),
-                bus_score=int(self.calculator.calculate_scorecard_component(bus_achievement)),
+                ind_score=self.calculator._round(
+                    self.calculator.calculate_scorecard_component(ind_achievement)
+                ),
+                bus_score=self.calculator._round(
+                    self.calculator.calculate_scorecard_component(bus_achievement)
+                ),
                 final_scorecard=self.calculator.calculate_final_scorecard(
                     ind_achievement, bus_achievement
                 ),

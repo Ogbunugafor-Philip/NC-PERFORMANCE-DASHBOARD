@@ -6,6 +6,7 @@ from app.core.dependencies import get_current_user, require_admin, require_roles
 from app.database import get_db
 from app.models.report import ClusterHeadRanking, ProcessedPerformance, Report
 from app.models.user import User, UserPosition
+from app.services.dashboard_full_service import FullDashboardService
 from app.services.performance_processor import ProcessorService
 from app.services.ranking_engine import get_fso_rank_display
 from app.services.regional_engine import RegionalEngine
@@ -115,14 +116,20 @@ def cluster_me(
     if ranking is None:
         return {"report_date": report.report_date.isoformat(), "empty": True, "message": "No team data for this Cluster Head in the active report"}
     status_engine = StatusEngine()
+    cluster_head_total = db.scalar(
+        select(func.count(User.id)).where(User.position == UserPosition.CLUSTER_HEAD)
+    ) or 0
     return {
         "report_date": report.report_date.isoformat(),
+        "report_date_label": report.report_date.strftime("%B %-d, %Y"),
         "empty": False,
         "cluster_head_id": str(current_user.id),
         "name": current_user.name,
         "dao_code": current_user.dao_code,
+        "state_cluster": current_user.cluster_name or "—",
         "rank": ranking.cluster_rank,
         "rank_ordinal": get_fso_rank_display(ranking.cluster_rank or 0),
+        "rank_total": cluster_head_total,
         "total_fso_count": ranking.total_fso_count,
         "team_scorecard": ranking.team_scorecard,
         "scorecard_grade": status_engine.get_scorecard_grade(ranking.team_scorecard),
@@ -225,6 +232,58 @@ def rsm_bottom_performers(
 def admin_summary(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     active_report_or_404(db)
     return RegionalEngine(db).get_regional_summary()
+
+
+# ── Rebuilt full-detail dashboard endpoints ──────────────────────────────
+@router.get("/rsm/full")
+def rsm_full(
+    _: User = Depends(require_roles(UserPosition.RSM, UserPosition.ADMIN)),
+    db: Session = Depends(get_db),
+) -> dict:
+    report = active_report_or_404(db)
+    return FullDashboardService(db).full(report)
+
+
+@router.get("/rsm/clusters")
+def rsm_clusters(
+    _: User = Depends(require_roles(UserPosition.RSM, UserPosition.ADMIN)),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    report = active_report_or_404(db)
+    return FullDashboardService(db).clusters(report)
+
+
+@router.get("/rsm/fso-full")
+def rsm_fso_full(
+    _: User = Depends(require_roles(UserPosition.RSM, UserPosition.ADMIN)),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    report = active_report_or_404(db)
+    return FullDashboardService(db).fso_leaderboard(report)
+
+
+@router.get("/cluster/team-full")
+def cluster_team_full(
+    current_user: User = Depends(require_roles(UserPosition.CLUSTER_HEAD, UserPosition.ADMIN)),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    report = active_report_or_404(db)
+    return FullDashboardService(db).team_fso_table(report, current_user.id)
+
+
+@router.get("/admin/full")
+def admin_full(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    report = active_report_or_404(db)
+    service = FullDashboardService(db)
+    payload = service.full(report)
+    payload["system_status"] = service.system_status(report)
+    return payload
+
+
+@router.get("/admin/system-status")
+def admin_system_status(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+    report = active_report_or_404(db)
+    return FullDashboardService(db).system_status(report)
 
 
 @router.post("/admin/recalculate")

@@ -11,6 +11,7 @@ class UserBase(BaseModel):
     dao_code: str = Field(min_length=2, max_length=64)
     position: UserPosition
     cluster_head_id: uuid.UUID | None = None
+    cluster_name: str | None = Field(default=None, max_length=100)
 
 
 class UserCreate(UserBase):
@@ -22,6 +23,7 @@ class UserUpdate(BaseModel):
     email: EmailStr | None = None
     position: UserPosition | None = None
     cluster_head_id: uuid.UUID | None = None
+    cluster_name: str | None = Field(default=None, max_length=100)
     is_active: bool | None = None
 
 
@@ -41,5 +43,6 @@ class UserProfile(BaseModel):
     is_active: bool
     is_first_login: bool
     cluster_head_id: uuid.UUID | None
+    cluster_name: str | None = None
     created_at: datetime
     updated_at: datetime

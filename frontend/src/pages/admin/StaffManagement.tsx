@@ -11,7 +11,7 @@ import { PageWrapper } from '../../components/layout/PageWrapper';
 import { useNotificationStore } from '../../store/reportStore';
 import type { UserPosition } from '../../types/auth';
 
-export const StaffManagement = () => {
+export const StaffManagementContent = () => {
   const [search, setSearch] = useState('');
   const [position, setPosition] = useState<UserPosition | ''>('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -30,7 +30,11 @@ export const StaffManagement = () => {
   });
   if (isLoading) return <LoadingSpinner />;
   return (
-    <PageWrapper title="Staff Management" subtitle="Manage RSM, Cluster Head, and FSO records" actions={<Box sx={{ display: 'flex', gap: 1 }}><Button component={RouterLink} to="/admin/staff/bulk" variant="outlined">Bulk Upload</Button><Button component={RouterLink} to="/admin/staff/create" variant="contained">Add Staff</Button></Box>}>
+    <Box>
+      <Box sx={{ display: 'flex', gap: 1, mb: 2, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+        <Button component={RouterLink} to="/admin/staff/bulk" variant="outlined">Bulk Upload</Button>
+        <Button component={RouterLink} to="/admin/staff/create" variant="contained">Add Staff</Button>
+      </Box>
       <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <TextField label="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
         <TextField select label="Position" value={position} onChange={(e) => setPosition(e.target.value as UserPosition | '')} sx={{ minWidth: 190 }}>
@@ -44,7 +48,7 @@ export const StaffManagement = () => {
         { key: 'name', label: 'Name', sortable: true },
         { key: 'dao_code', label: 'DAO Code', sortable: true },
         { key: 'position', label: 'Position', sortable: true },
-        { key: 'cluster_head_id', label: 'Cluster Head' },
+        { key: 'cluster_name', label: 'Cluster' },
         { key: 'is_active', label: 'Status', render: (row) => row.is_active ? 'Active' : 'Inactive' },
         { key: 'actions', label: 'Actions', render: (row) => <><IconButton onClick={() => navigate(`/admin/staff/${row.id}/edit`)}><EditIcon /></IconButton><IconButton color="error" onClick={() => setDeleteId(String(row.id))}><DeleteIcon /></IconButton></> }
       ]} />
@@ -53,6 +57,12 @@ export const StaffManagement = () => {
         <DialogContent>This action removes the staff member and related access.</DialogContent>
         <DialogActions><Button onClick={() => setDeleteId(null)}>Cancel</Button><Button color="error" variant="contained" onClick={() => deleteId && mutation.mutate(deleteId)}>Delete</Button></DialogActions>
       </Dialog>
-    </PageWrapper>
+    </Box>
   );
 };
+
+export const StaffManagement = () => (
+  <PageWrapper title="Staff Management" subtitle="Manage RSM, Cluster Head, and FSO records">
+    <StaffManagementContent />
+  </PageWrapper>
+);

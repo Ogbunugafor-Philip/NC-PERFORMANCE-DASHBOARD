@@ -10,7 +10,7 @@ import { daoCodePattern } from '../../utils/validators';
 
 export const StaffForm = ({ initial, onSubmit, submitLabel }: { initial?: Partial<StaffPayload>; onSubmit: (values: StaffPayload) => void; submitLabel: string }) => {
   const { data: clusterHeads = [] } = useQuery({ queryKey: ['cluster-heads'], queryFn: getClusterHeads });
-  const { control, handleSubmit, watch } = useForm<StaffPayload>({ defaultValues: { name: initial?.name || '', dao_code: initial?.dao_code || '', position: initial?.position || 'FSO', cluster_head_id: initial?.cluster_head_id || '' } });
+  const { control, handleSubmit, watch } = useForm<StaffPayload>({ defaultValues: { name: initial?.name || '', dao_code: initial?.dao_code || '', position: initial?.position || 'FSO', cluster_head_id: initial?.cluster_head_id || '', cluster_name: initial?.cluster_name || '' } });
   const position = watch('position');
   return (
     <Card><CardContent>
@@ -19,6 +19,7 @@ export const StaffForm = ({ initial, onSubmit, submitLabel }: { initial?: Partia
         <Controller name="dao_code" control={control} rules={{ required: 'DAO Code is required', pattern: { value: daoCodePattern, message: 'Invalid DAO code' } }} render={({ field, fieldState }) => <TextField {...field} label="DAO Code" error={!!fieldState.error} helperText={fieldState.error?.message} />} />
         <Controller name="position" control={control} render={({ field }) => <TextField {...field} select label="Position"><MenuItem value="RSM">RSM</MenuItem><MenuItem value="CLUSTER_HEAD">Cluster Head</MenuItem><MenuItem value="FSO">FSO</MenuItem></TextField>} />
         {position === 'FSO' && <Controller name="cluster_head_id" control={control} render={({ field }) => <TextField {...field} select label="Cluster Head"><MenuItem value="">Unassigned</MenuItem>{clusterHeads.map((head) => <MenuItem key={head.id} value={head.id}>{head.name} ({head.dao_code})</MenuItem>)}</TextField>} />}
+        {position === 'CLUSTER_HEAD' && <Controller name="cluster_name" control={control} render={({ field }) => <TextField {...field} label="State Cluster" placeholder="e.g. Benue 1, Kogi 2, FCT 1" />} />}
         <Box sx={{ display: 'flex', gap: 1 }}><Button type="submit" variant="contained">{submitLabel}</Button><Button href="/admin/staff" color="secondary">Cancel</Button></Box>
       </Box>
     </CardContent></Card>

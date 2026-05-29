@@ -11,6 +11,7 @@ class StaffCreate(BaseModel):
     dao_code: str = Field(min_length=2, max_length=64)
     position: UserPosition
     cluster_head_id: uuid.UUID | None = None
+    cluster_name: str | None = Field(default=None, max_length=100)
 
 
 class StaffUpdate(UserUpdate):

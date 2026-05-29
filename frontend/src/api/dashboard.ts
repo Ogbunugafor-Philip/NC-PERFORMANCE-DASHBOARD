@@ -60,3 +60,34 @@ export const getValidation = async () => {
   const { data } = await apiClient.get('/dashboard/admin/validation');
   return data;
 };
+
+// ── Rebuilt full-detail dashboard endpoints ───────────────────────────────
+export const getRsmFull = async () => {
+  const { data } = await apiClient.get('/dashboard/rsm/full');
+  return data;
+};
+
+export const getRsmClusters = async () => {
+  const { data } = await apiClient.get('/dashboard/rsm/clusters');
+  return data;
+};
+
+export const getRsmFsoFull = async () => {
+  const { data } = await apiClient.get('/dashboard/rsm/fso-full');
+  return data;
+};
+
+export const getClusterTeamFull = async () => {
+  const { data } = await apiClient.get('/dashboard/cluster/team-full');
+  return data;
+};
+
+export const getAdminFull = async () => {
+  const { data } = await apiClient.get('/dashboard/admin/full');
+  return data;
+};
+
+export const getSystemStatus = async () => {
+  const { data } = await apiClient.get('/dashboard/admin/system-status');
+  return data;
+};

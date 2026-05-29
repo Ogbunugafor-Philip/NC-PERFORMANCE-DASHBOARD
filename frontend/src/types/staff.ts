@@ -5,6 +5,7 @@ export interface StaffPayload {
   dao_code: string;
   position: UserPosition;
   cluster_head_id?: string | null;
+  cluster_name?: string | null;
 }
 
 export interface StaffMember extends StaffPayload {
