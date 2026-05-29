@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import SessionLocal
-from app.routers import admin, auth, staff, users
+from app.routers import admin, auth, dashboard, reports, staff, users
 from app.services.bootstrap_service import ensure_admin_user
 
 
@@ -45,3 +45,5 @@ app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(admin.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(staff.router, prefix=API_PREFIX)
+app.include_router(reports.router, prefix=API_PREFIX)
+app.include_router(dashboard.router, prefix=API_PREFIX)
