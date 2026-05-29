@@ -6,6 +6,7 @@ import { getBottomPerformers, getClusterLeaderboard, getFsoLeaderboard, getRsmSu
 import { AchievementGauge } from '../../components/charts/AchievementGauge';
 import { ClusterComparisonChart } from '../../components/charts/ClusterComparisonChart';
 import { RegionalTrendCard } from '../../components/charts/RegionalTrendCard';
+import { AIInsightCard } from '../../components/common/AIInsightCard';
 import { DashboardErrorState, DashboardSkeleton, EmptyReportState } from '../../components/common/DashboardStates';
 import { DataTable } from '../../components/common/DataTable';
 import { KPICard } from '../../components/common/KPICard';
@@ -47,6 +48,9 @@ export const RSMDashboard = () => {
           <Grid item xs={12} lg={7}><RegionalTrendCard regionalSummary={summary.data} /></Grid>
           <Grid item xs={12} lg={8}><Card><CardContent><ClusterComparisonChart clusterList={clusterRows} /></CardContent></Card></Grid>
           <Grid item xs={12} lg={4}><Grid container spacing={2}><Grid item xs={12}><KPICard title="Top Cluster" value={summary.data.top_performing_cluster_head?.name || 'N/A'} color="#00A651" /></Grid><Grid item xs={12}><KPICard title="Lowest Cluster" value={summary.data.bottom_performing_cluster_head?.name || 'N/A'} color="#E4002B" /></Grid></Grid></Grid>
+          <Grid item xs={12}>
+            <AIInsightCard source="regional" title="Regional Performance Insight" />
+          </Grid>
         </Grid>
       )}
       {tab === 1 && (

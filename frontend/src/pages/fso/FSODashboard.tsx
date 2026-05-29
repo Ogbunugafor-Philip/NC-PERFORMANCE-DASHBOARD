@@ -10,6 +10,7 @@ import { AchievementGauge } from '../../components/charts/AchievementGauge';
 import { PerformanceBarChart } from '../../components/charts/PerformanceBarChart';
 import { PerformancePieChart } from '../../components/charts/PerformancePieChart';
 import { AchievementBanner } from '../../components/common/AchievementBanner';
+import { AIInsightCard } from '../../components/common/AIInsightCard';
 import { DashboardErrorState, DashboardSkeleton, EmptyReportState } from '../../components/common/DashboardStates';
 import { DRRComparisonCard } from '../../components/common/DRRComparisonCard';
 import { KPICard } from '../../components/common/KPICard';
@@ -84,6 +85,9 @@ export const FSODashboard = () => {
           ]} /></CardContent></Card>
         </Grid>
         <Grid item xs={12} lg={5}><Card><CardContent><AchievementGauge value={data.final_scorecard} label="Overall Scorecard" /></CardContent></Card></Grid>
+        <Grid item xs={12}>
+          <AIInsightCard source="me" title="Your Personal Performance Insight" />
+        </Grid>
       </Grid>
     </PageWrapper>
   );

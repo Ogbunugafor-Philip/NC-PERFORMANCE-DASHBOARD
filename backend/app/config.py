@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: str | None = None
     ADMIN_DEFAULT_PASSWORD: str | None = None
 
+    CEREBRAS_API_KEY: str = ""
+    CEREBRAS_MODEL: str = "gpt-oss-120b"
+    CEREBRAS_TIMEOUT_SECONDS: int = 30
+    CEREBRAS_ENABLED: bool = True
+
     @property
     def allowed_origins(self) -> list[str]:
         origins: list[str] = []

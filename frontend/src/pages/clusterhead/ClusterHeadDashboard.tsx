@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { getClusterMe, getClusterTeam, getFsoMe } from '../../api/dashboard';
 import { TeamComparisonChart } from '../../components/charts/TeamComparisonChart';
+import { AIInsightCard } from '../../components/common/AIInsightCard';
 import { DashboardErrorState, DashboardSkeleton, EmptyReportState } from '../../components/common/DashboardStates';
 import { DataTable } from '../../components/common/DataTable';
 import { DRRComparisonCard } from '../../components/common/DRRComparisonCard';
@@ -69,6 +70,9 @@ export const ClusterHeadDashboard = () => {
             <Grid item xs={12} lg={4}><KPICard title="Total FSOs" value={me.data.total_fso_count} color="#1A1A1A" /></Grid>
             <Grid item xs={12}><AccountPerformanceSection title="Team Individual Accounts" metric={teamMetric(me.data.individual)} /></Grid>
             <Grid item xs={12}><AccountPerformanceSection title="Team Business Accounts" metric={teamMetric(me.data.business)} /></Grid>
+            <Grid item xs={12}>
+              <AIInsightCard source="me" title="Performance Insight" />
+            </Grid>
           </>
         )}
         {tab === 1 && (
@@ -87,6 +91,9 @@ export const ClusterHeadDashboard = () => {
         <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Top 5 Performers</Typography><Box sx={{ display: 'grid', gap: 1 }}>{top.map((r) => <LeaderboardRow key={r.dao_code} rank={r.rank} name={r.name} daoCode={r.dao_code} indAchievement={r.individual.percentage_achievement} busAchievement={r.business.percentage_achievement} scorecard={r.final_scorecard} />)}</Box></CardContent></Card></Grid>
         <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Needs Attention</Typography><Box sx={{ display: 'grid', gap: 1 }}>{bottom.map((r) => <LeaderboardRow key={r.dao_code} rank={r.rank} name={r.name} daoCode={r.dao_code} indAchievement={r.individual.percentage_achievement} busAchievement={r.business.percentage_achievement} scorecard={r.final_scorecard} />)}</Box></CardContent></Card></Grid>
         <Grid item xs={12}><Card><CardContent><Typography variant="h6">Full Team Leaderboard</Typography><TeamLeaderboard rows={rows} /></CardContent></Card></Grid>
+        <Grid item xs={12}>
+          <AIInsightCard source="me" title="Team Performance Insight" />
+        </Grid>
           </>
         )}
       </Grid>

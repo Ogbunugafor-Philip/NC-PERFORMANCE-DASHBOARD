@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -228,9 +228,17 @@ def admin_summary(_: User = Depends(require_admin), db: Session = Depends(get_db
 
 
 @router.post("/admin/recalculate")
-def admin_recalculate(_: User = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
+def admin_recalculate(
+    background_tasks: BackgroundTasks,
+    _: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.insight_service import bg_generate_all_insights
+
     report = active_report_or_404(db)
-    return ProcessorService(db).run_full_pipeline(report)
+    result = ProcessorService(db).run_full_pipeline(report)
+    background_tasks.add_task(bg_generate_all_insights, report.id)
+    return result
 
 
 @router.get("/admin/validation")

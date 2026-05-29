@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, require_admin
@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.auth import MessageResponse
 from app.schemas.reports import ReportOut, ReportStatus, ReportUploadResponse
+from app.services.insight_service import bg_generate_all_insights
 from app.services.report_service import (
     create_report,
     delete_report,
@@ -22,12 +23,14 @@ router = APIRouter(prefix="/reports", tags=["reports"])
 
 @router.post("/upload", response_model=ReportUploadResponse)
 async def upload_report(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ) -> ReportUploadResponse:
     report_date, rows, missing_fields = await parse_performance_excel(file)
     report, validation, created = create_report(db, report_date, rows, missing_fields, current_user)
+    background_tasks.add_task(bg_generate_all_insights, report.id)
     return ReportUploadResponse(report=report, validation=validation, records_created=created)
 
 
