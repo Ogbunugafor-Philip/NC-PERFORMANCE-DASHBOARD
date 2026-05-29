@@ -101,7 +101,7 @@ export const Sidebar = ({ role, collapsed = false }: { role: UserPosition; colla
     </Box>
   );
   return (
-    <Drawer variant="permanent" sx={{ width, flexShrink: 0, '& .MuiDrawer-paper': { width, border: 0, boxSizing: 'border-box' } }} open>
+    <Drawer variant="permanent" sx={{ '& .MuiDrawer-paper': { width, border: 0 } }} open>
       {drawer}
     </Drawer>
   );
