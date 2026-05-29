@@ -1,13 +1,15 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import SessionLocal  # noqa: F401 — used in health endpoint
 from app.routers import admin, auth, dashboard, reports, staff, users
 from app.routers import insights as insights_router
 from app.services.bootstrap_service import ensure_admin_user
@@ -65,6 +67,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,
@@ -74,9 +77,45 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def _request_timing(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    elapsed = time.perf_counter() - start
+    if elapsed > 2.0:
+        logger.warning("SLOW REQUEST %.3fs  %s %s", elapsed, request.method, request.url.path)
+    response.headers["X-Response-Time"] = f"{elapsed:.3f}s"
+    return response
+
+
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+def health() -> dict:
+    from sqlalchemy import select, text
+    from app.models.report import Report
+
+    db = SessionLocal()
+    db_status = "connected"
+    active_report_label = None
+    try:
+        db.execute(text("SELECT 1"))
+        report = db.scalar(
+            select(Report).where(Report.is_active.is_(True)).order_by(Report.uploaded_at.desc())
+        )
+        if report:
+            active_report_label = report.report_date.strftime("%-d %b %Y")
+    except Exception:
+        db_status = "error"
+    finally:
+        db.close()
+
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "database": db_status,
+        "active_report": active_report_label,
+        "version": getattr(settings, "APP_VERSION", "1.0.0"),
+        "environment": settings.APP_ENV,
+    }
 
 
 API_PREFIX = "/api/v1"
