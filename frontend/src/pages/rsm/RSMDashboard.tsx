@@ -1,45 +1,47 @@
-import { Card, CardContent, TextField, Typography } from '@mui/material';
+import { Alert, Card, CardContent, TextField, Typography } from '@mui/material';
 import Grid from '@mui/material/GridLegacy';
+import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { getBottomPerformers, getClusterLeaderboard, getFsoLeaderboard, getRsmSummary, getTopPerformers } from '../../api/dashboard';
 import { TeamComparisonChart } from '../../components/charts/TeamComparisonChart';
 import { DataTable } from '../../components/common/DataTable';
 import { KPICard } from '../../components/common/KPICard';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
-import { ScoreCard } from '../../components/common/ScoreCard';
+import { ScorecardGauge } from '../../components/common/ScorecardGauge';
 import { PageWrapper } from '../../components/layout/PageWrapper';
-import { useDashboard } from '../../hooks/useDashboard';
 import { formatDate, formatPercent } from '../../utils/formatters';
 import { TeamLeaderboard } from '../clusterhead/ClusterHeadDashboard';
 
 export const RSMDashboard = () => {
-  const { data, isLoading } = useDashboard();
+  const summary = useQuery({ queryKey: ['dashboard-rsm-summary'], queryFn: getRsmSummary });
+  const fso = useQuery({ queryKey: ['dashboard-fso-leaderboard'], queryFn: getFsoLeaderboard });
+  const clusters = useQuery({ queryKey: ['dashboard-cluster-leaderboard'], queryFn: getClusterLeaderboard });
+  const top = useQuery({ queryKey: ['dashboard-top-performers'], queryFn: getTopPerformers });
+  const bottom = useQuery({ queryKey: ['dashboard-bottom-performers'], queryFn: getBottomPerformers });
   const [search, setSearch] = useState('');
-  const filtered = useMemo(() => (data?.leaderboard || []).filter((row) => `${row.name} ${row.dao_code}`.toLowerCase().includes(search.toLowerCase())), [data, search]);
-  if (isLoading || !data) return <LoadingSpinner />;
-  const top = filtered.slice(0, 10);
-  const bottom = filtered.slice(-10).reverse();
-  const topCluster = data.cluster_leaderboard[0];
-  const lowCluster = data.cluster_leaderboard[data.cluster_leaderboard.length - 1];
+  const filtered = useMemo(() => ((fso.data || []) as any[]).filter((row) => `${row.name} ${row.dao_code}`.toLowerCase().includes(search.toLowerCase())), [fso.data, search]);
+  if (summary.isLoading || fso.isLoading || clusters.isLoading) return <LoadingSpinner />;
+  if (summary.error) return <Alert severity="info">No active report. Please contact your administrator.</Alert>;
   return (
-    <PageWrapper title="Regional Overview" subtitle={`New to Bank Report as at ${formatDate(data.report_date)}`}>
+    <PageWrapper title="Regional Overview" subtitle={`New to Bank Report as at ${formatDate(summary.data.report_date)}`}>
       <Grid container spacing={2.5}>
-        <Grid item xs={12} md={3}><KPICard label="Total Regional Target" value={Number(data.team_summary.total_team_target || 0).toLocaleString()} /></Grid>
-        <Grid item xs={12} md={3}><KPICard label="Total Valid" value={Number(data.team_summary.total_team_valid || 0).toLocaleString()} /></Grid>
-        <Grid item xs={12} md={3}><KPICard label="Regional Achievement %" value={formatPercent(data.scorecard)} /></Grid>
-        <Grid item xs={12} md={3}><ScoreCard title="Regional Scorecard" score={data.scorecard} /></Grid>
-        <Grid item xs={12}><Card><CardContent><Typography variant="h6">Performance Trend</Typography><TeamComparisonChart data={data.leaderboard.slice(0, 12).map((r) => ({ name: r.dao_code, individual: r.ind_achievement_percentage, business: r.bus_achievement_percentage }))} /></CardContent></Card></Grid>
+        <Grid item xs={12} md={3}><KPICard label="Total Regional Target" value={summary.data.total_target.toLocaleString()} /></Grid>
+        <Grid item xs={12} md={3}><KPICard label="Total Valid" value={summary.data.total_valid.toLocaleString()} /></Grid>
+        <Grid item xs={12} md={3}><KPICard label="Regional Achievement %" value={formatPercent(summary.data.regional_percentage_achievement)} /></Grid>
+        <Grid item xs={12} md={3}><Card><CardContent><ScorecardGauge score={summary.data.regional_scorecard} label="Regional Score" /></CardContent></Card></Grid>
+        <Grid item xs={12}><Card><CardContent><Typography variant="h6">Performance Trend</Typography><TeamComparisonChart data={filtered.slice(0, 12).map((r) => ({ name: r.dao_code, individual: r.individual?.percentage_achievement ?? r.ind_percentage_achievement ?? 0, business: r.business?.percentage_achievement ?? r.bus_percentage_achievement ?? 0 }))} /></CardContent></Card></Grid>
         <Grid item xs={12}><TextField label="Search FSOs" value={search} onChange={(event) => setSearch(event.target.value)} sx={{ maxWidth: 360 }} fullWidth /></Grid>
-        <Grid item xs={12}><Card><CardContent><Typography variant="h6" id="fsos">Full FSO Leaderboard</Typography><TeamLeaderboard rows={filtered} /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Top 10 FSOs</Typography><TeamLeaderboard rows={top} /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Bottom 10 FSOs</Typography><TeamLeaderboard rows={bottom} /></CardContent></Card></Grid>
-        <Grid item xs={12}><Card><CardContent><Typography variant="h6" id="clusters">Cluster Head Leaderboard</Typography><DataTable rows={data.cluster_leaderboard as unknown as Record<string, unknown>[]} columns={[
+        <Grid item xs={12}><Card><CardContent><Typography variant="h6" id="fsos">Full FSO Leaderboard</Typography><TeamLeaderboard rows={filtered as Record<string, unknown>[]} /></CardContent></Card></Grid>
+        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Top 10 FSOs</Typography><TeamLeaderboard rows={(top.data || []) as Record<string, unknown>[]} /></CardContent></Card></Grid>
+        <Grid item xs={12} lg={6}><Card><CardContent><Typography variant="h6">Bottom 10 FSOs</Typography><TeamLeaderboard rows={(bottom.data || []) as Record<string, unknown>[]} /></CardContent></Card></Grid>
+        <Grid item xs={12}><Card><CardContent><Typography variant="h6" id="clusters">Cluster Head Leaderboard</Typography><DataTable rows={(clusters.data || []) as Record<string, unknown>[]} columns={[
           { key: 'rank', label: 'Rank', sortable: true },
           { key: 'name', label: 'Cluster Head', sortable: true },
           { key: 'dao_code', label: 'DAO Code' },
-          { key: 'scorecard', label: 'Scorecard', sortable: true, render: (row) => Number(row.scorecard).toFixed(1) }
+          { key: 'team_scorecard', label: 'Team Scorecard', sortable: true }
         ]} /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={8}><Card><CardContent><Typography variant="h6">Cluster Comparison</Typography><TeamComparisonChart data={data.cluster_leaderboard.map((r) => ({ name: r.dao_code, individual: r.ind_achievement_percentage, business: r.bus_achievement_percentage }))} /></CardContent></Card></Grid>
-        <Grid item xs={12} lg={4}><Grid container spacing={2}><Grid item xs={12}><KPICard label="Top Performing Cluster" value={topCluster?.name || 'N/A'} helper={topCluster ? `${topCluster.scorecard.toFixed(1)} score` : undefined} /></Grid><Grid item xs={12}><KPICard label="Lowest Performing Cluster" value={lowCluster?.name || 'N/A'} helper={lowCluster ? `${lowCluster.scorecard.toFixed(1)} score` : undefined} /></Grid></Grid></Grid>
+        <Grid item xs={12} lg={8}><Card><CardContent><Typography variant="h6">Cluster Comparison</Typography><TeamComparisonChart data={((clusters.data || []) as any[]).map((r) => ({ name: r.dao_code, individual: r.ind_percentage_achievement, business: r.bus_percentage_achievement }))} /></CardContent></Card></Grid>
+        <Grid item xs={12} lg={4}><Grid container spacing={2}><Grid item xs={12}><KPICard label="Top Performing Cluster" value={summary.data.top_performing_cluster_head?.name || 'N/A'} /></Grid><Grid item xs={12}><KPICard label="Lowest Performing Cluster" value={summary.data.bottom_performing_cluster_head?.name || 'N/A'} /></Grid></Grid></Grid>
       </Grid>
     </PageWrapper>
   );

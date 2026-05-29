@@ -1,57 +1,70 @@
-import { Card, CardContent, Typography } from '@mui/material';
+import { Alert, Card, CardContent, Typography } from '@mui/material';
 import Grid from '@mui/material/GridLegacy';
+import { useQuery } from '@tanstack/react-query';
+import { getFsoMe } from '../../api/dashboard';
 import { PerformanceBarChart } from '../../components/charts/PerformanceBarChart';
 import { PerformancePieChart } from '../../components/charts/PerformancePieChart';
+import { DRRComparison } from '../../components/common/DRRComparison';
 import { KPICard } from '../../components/common/KPICard';
 import { LoadingSpinner } from '../../components/common/LoadingSpinner';
 import { ProgressBar } from '../../components/common/ProgressBar';
-import { RankingCard } from '../../components/common/RankingCard';
-import { ScoreCard } from '../../components/common/ScoreCard';
+import { RankDisplay } from '../../components/common/RankDisplay';
+import { ScorecardGauge } from '../../components/common/ScorecardGauge';
+import { StatusBadge } from '../../components/common/StatusBadge';
 import { PageWrapper } from '../../components/layout/PageWrapper';
-import { useDashboard } from '../../hooks/useDashboard';
-import type { DashboardMetric } from '../../types/dashboard';
 import { formatDate, formatNumber, formatPercent } from '../../utils/formatters';
 
-export const AccountCard = ({ title, metric }: { title: string; metric: DashboardMetric }) => (
+export interface AccountMetric {
+  target: number;
+  actual: number;
+  valid: number;
+  invalid_count: number;
+  percentage_invalid: number;
+  percentage_achievement: number;
+  current_drr: number;
+  required_drr: number;
+  accounts_outstanding: number;
+  status: string;
+  drr_status: string;
+}
+
+export const AccountCard = ({ title, metric }: { title: string; metric: AccountMetric }) => (
   <Card>
     <CardContent>
-      <Typography variant="h6" sx={{ mb: 2 }}>{title}</Typography>
+      <Typography variant="h6" sx={{ mb: 2 }}>{title} <StatusBadge status={metric.status} /></Typography>
       <Grid container spacing={2}>
         <Grid item xs={6} sm={4}><KPICard label="Target" value={formatNumber(metric.target)} /></Grid>
         <Grid item xs={6} sm={4}><KPICard label="Actual" value={formatNumber(metric.actual)} /></Grid>
         <Grid item xs={6} sm={4}><KPICard label="Valid" value={formatNumber(metric.valid)} /></Grid>
-        <Grid item xs={6} sm={4}><KPICard label="Invalid Count" value={formatNumber(metric.invalid)} /></Grid>
-        <Grid item xs={6} sm={4}><KPICard label="% Invalid" value={formatPercent(metric.invalid_percentage)} /></Grid>
-        <Grid item xs={6} sm={4}><KPICard label="% Achievement" value={formatPercent(metric.achievement_percentage)} /></Grid>
-        <Grid item xs={12} sm={6}><KPICard label="Current Daily Run Rate" value={metric.current_daily_run_rate} /></Grid>
-        <Grid item xs={12} sm={6}><KPICard label="Required Daily Run Rate" value={metric.required_daily_run_rate} /></Grid>
-        <Grid item xs={12}><ProgressBar value={metric.achievement_percentage} /></Grid>
-        <Grid item xs={12}><PerformancePieChart valid={metric.valid} invalid={metric.invalid} /></Grid>
+        <Grid item xs={6} sm={4}><KPICard label="Invalid Count" value={formatNumber(metric.invalid_count)} /></Grid>
+        <Grid item xs={6} sm={4}><KPICard label="% Invalid" value={formatPercent(metric.percentage_invalid)} /></Grid>
+        <Grid item xs={6} sm={4}><KPICard label="% Achievement" value={formatPercent(metric.percentage_achievement)} /></Grid>
+        <Grid item xs={12} sm={6}><KPICard label="Accounts Outstanding" value={formatNumber(metric.accounts_outstanding)} /></Grid>
+        <Grid item xs={12} sm={6}><DRRComparison current={metric.current_drr} required={metric.required_drr} status={metric.drr_status} /></Grid>
+        <Grid item xs={12}><ProgressBar value={metric.percentage_achievement} /></Grid>
+        <Grid item xs={12}><PerformancePieChart valid={metric.valid} invalid={metric.invalid_count} /></Grid>
       </Grid>
     </CardContent>
   </Card>
 );
 
 export const FSODashboard = () => {
-  const { data, isLoading } = useDashboard();
-  if (isLoading || !data) return <LoadingSpinner />;
+  const { data, isLoading, error } = useQuery({ queryKey: ['dashboard-fso-me'], queryFn: getFsoMe });
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <Alert severity="info">No active report. Please contact your administrator.</Alert>;
+  if (data?.empty) return <Alert severity="info">{data.message || 'No active report. Please contact your administrator.'}</Alert>;
   return (
     <PageWrapper title={`New to Bank Report as at ${formatDate(data.report_date)}`} subtitle="Individual performance scorecard">
       <Grid container spacing={2.5}>
-        <Grid item xs={12} md={6}><ScoreCard title="My Scorecard" score={data.scorecard} /></Grid>
-        <Grid item xs={12} md={6}><RankingCard title="My Regional Ranking" ranking={data.ranking} /></Grid>
+        <Grid item xs={12} md={6}><Card><CardContent><ScorecardGauge score={data.final_scorecard} /><Typography textAlign="center" fontWeight={900}>{data.scorecard_grade}</Typography></CardContent></Card></Grid>
+        <Grid item xs={12} md={6}><RankDisplay ordinal={data.rank_ordinal} total={data.rank_total} /></Grid>
         <Grid item xs={12} lg={6}><AccountCard title="Individual Accounts" metric={data.individual} /></Grid>
         <Grid item xs={12} lg={6}><AccountCard title="Business Accounts" metric={data.business} /></Grid>
         <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" sx={{ mb: 2 }}>Performance Summary</Typography>
-              <PerformanceBarChart data={[
-                { name: 'Individual', achievement: data.individual.achievement_percentage },
-                { name: 'Business', achievement: data.business.achievement_percentage }
-              ]} />
-            </CardContent>
-          </Card>
+          <Card><CardContent><Typography variant="h6" sx={{ mb: 2 }}>Performance Summary</Typography><PerformanceBarChart data={[
+            { name: 'Individual', achievement: data.individual.percentage_achievement },
+            { name: 'Business', achievement: data.business.percentage_achievement }
+          ]} /></CardContent></Card>
         </Grid>
       </Grid>
     </PageWrapper>

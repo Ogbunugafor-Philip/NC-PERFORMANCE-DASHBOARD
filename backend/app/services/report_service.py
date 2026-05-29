@@ -73,6 +73,9 @@ def create_report(
         )
     db.commit()
     db.refresh(report)
+    from app.services.performance_processor import ProcessorService
+
+    ProcessorService(db).run_full_pipeline(report)
     return report, validation, len(rows)
 
 
