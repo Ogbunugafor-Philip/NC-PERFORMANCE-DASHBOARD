@@ -17,8 +17,6 @@ const menuByRole: Record<UserPosition, { label: string; path: string; icon: Reac
     { label: 'Dashboard', path: '/admin/dashboard', icon: <DashboardIcon /> },
     { label: 'Staff Management', path: '/admin/staff', icon: <GroupsIcon /> },
     { label: 'Performance Upload', path: '/admin/performance-upload', icon: <UploadFileIcon /> },
-    { label: 'Reports', path: '/admin/reports', icon: <AssessmentIcon /> },
-    { label: 'Analytics', path: '/admin/analytics', icon: <InsightsIcon /> }
   ],
   RSM: [
     { label: 'Dashboard', path: '/rsm/dashboard', icon: <DashboardIcon /> },

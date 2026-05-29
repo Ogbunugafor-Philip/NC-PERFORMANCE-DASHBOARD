@@ -8,7 +8,6 @@ import { Link as RouterLink } from 'react-router-dom';
 import { getAdminSummary, getValidation, recalculate } from '../../api/dashboard';
 import { generateAllInsights } from '../../api/insights';
 import { getReportStatus } from '../../api/reports';
-import { AIInsightCard } from '../../components/common/AIInsightCard';
 import { CerebrasStatusCard } from '../../components/common/CerebrasStatusCard';
 import { DashboardErrorState, DashboardSkeleton, EmptyReportState } from '../../components/common/DashboardStates';
 import { KPICard } from '../../components/common/KPICard';
@@ -52,14 +51,7 @@ export const AdminDashboard = () => {
         <Tab label="Staff Management" />
         <Tab label="System Status" />
       </Tabs>
-      {tab === 0 && (
-        <>
-          <RSMDashboard />
-          <Box sx={{ mt: 2.5 }}>
-            <AIInsightCard source="regional" title="Regional Performance Insight" />
-          </Box>
-        </>
-      )}
+      {tab === 0 && <RSMDashboard />}
       {tab === 1 && (
         <Grid container spacing={2.5}>
           <Grid item xs={12}>
